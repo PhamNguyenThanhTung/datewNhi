@@ -6,6 +6,7 @@ import LoginScreen from "./screens/LoginScreen";
 import SetupScreen from "./screens/SetupScreen";
 import CodeShare from "./screens/CodeShare";
 import MainApp from "./screens/MainApp/MainApp";
+
 import { getMyRoom, getSessionProfile, profileToUser, signOut, updateProfile } from "./lib/coupleService";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
 
@@ -64,6 +65,8 @@ export default function App() {
         // Đồng bộ ID với OneSignal để nhận thông báo chuẩn
         import("react-onesignal").then((OneSignal) => {
           OneSignal.default.login(nextUser.id);
+          // Hỏi quyền để gửi thông báo
+          OneSignal.default.showSlidedownPrompt();
         });
 
         const room = await getMyRoom(nextUser);

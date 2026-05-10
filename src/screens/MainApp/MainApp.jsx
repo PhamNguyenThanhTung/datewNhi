@@ -3,9 +3,9 @@ import Avatar from "../../components/Avatar";
 import useLS from "../../hooks/useLS";
 import { getTodayKey } from "../../data/questions";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
-import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, subscribeRoom, toggleBucketItem, uploadMemory } from "../../lib/coupleService";
+import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, sendPushNotification, subscribeRoom, toggleBucketItem, uploadMemory } from "../../lib/coupleService";
 import { useDailyPrompts } from "../../hooks/useDailyPrompts";
-
+import GamesTab from "./tabs/GamesTab"; // Đường dẫn tuỳ thuộc vào file MainApp của bạn đang ở đâu
 import HomeTab from "./tabs/HomeTab";
 import HistoryTab from "./tabs/HistoryTab";
 import BucketTab from "./tabs/BucketTab";
@@ -143,7 +143,9 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       setLocalMyAnswers(next);
       return next;
     });
-    await saveAnswer({ roomId, userId: user.id, question, answer });
+    // Gửi thông báo cho người kia
+    const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
+    await saveAnswer({ roomId, userId: user.id, userName: user.name, partnerId, question, answer });
   };
 
   const submitPt = async () => {
@@ -168,6 +170,12 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     if (isSupabaseConfigured) {
       const inserted = await saveBucketItem(roomId, text);
       if (inserted) setBucket((b) => [inserted, ...b]);
+      attemptStreakUpdate(); // Streak cộng khi add bucket item
+      // Gửi thông báo cho người kia
+      const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
+      if (partnerId) {
+        sendPushNotification(partnerId, `${user.name} vừa thêm vào danh sách: "${text}" ✨`);
+      }
       return;
     }
     const item = { id: Date.now(), text, done: false };
@@ -176,12 +184,19 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       setLocalBucket(next);
       return next;
     });
+    attemptStreakUpdate(); // Streak cộng khi add bucket item
   };
 
   const addSuggestion = async (text, index) => {
     if (isSupabaseConfigured) {
       const inserted = await saveBucketItem(roomId, text);
       if (inserted) setBucket((b) => [inserted, ...b]);
+      attemptStreakUpdate(); // Streak cộng khi accept suggestion
+      // Gửi thông báo cho người kia
+      const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
+      if (partnerId) {
+        sendPushNotification(partnerId, `${user.name} vừa chấp nhận gợi ý: "${text}" ✨`);
+      }
       return;
     }
     setBucket((b) => {
@@ -189,6 +204,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       setLocalBucket(next);
       return next;
     });
+    attemptStreakUpdate(); // Streak cộng khi accept suggestion
   };
 
   const toggleItem = async (id) => {
@@ -215,6 +231,12 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const handleSaveCountdown = async (nextCountdown) => {
     setCountdown(nextCountdown);
     await saveCountdown(roomId, nextCountdown);
+    attemptStreakUpdate(); // Streak cộng khi save countdown
+    // Gửi thông báo cho người kia
+    const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
+    if (partnerId && nextCountdown.title) {
+      sendPushNotification(partnerId, `${user.name} vừa cập nhật: "${nextCountdown.title}" ⏰`);
+    }
   };
 
   const saveProfile = () => {
@@ -226,6 +248,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const tabs = [
     { id: "home", icon: "🕯️", label: "Hôm nay" },
     { id: "history", icon: "📖", label: "Lịch sử" },
+    { id: "games", icon: "🎮", label: "Góc Vui" },
     { id: "album", icon: "🖼️", label: "Album" },
     { id: "countdown", icon: "⏰", label: "Đếm ngày" },
     { id: "bucket", icon: "🌟", label: "Danh sách" },
@@ -272,6 +295,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
         )}
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
+        {tab === 'games' && (<GamesTab roomId={couple.id} userId={user.id} myName={user.name} partnerName={couple.partnerName} partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id} />)}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
         {tab === "countdown" && <CountdownTab countdown={countdown} onSave={handleSaveCountdown} />}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}

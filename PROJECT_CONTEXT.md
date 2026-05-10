@@ -19,6 +19,7 @@
   - **Realtime:** Đồng bộ hóa câu trả lời và các tính năng tương tác tức thì.
 - **Serverless Functions:** Vercel Functions (Node.js) + Cron Jobs.
 - **Email Service:** Gmail OAuth2 + Nodemailer.
+- **Push Notifications:** OneSignal (web notifications).
 - **Image Optimization:** browser-image-compression (nén ảnh 5MB → 300KB).
 - **Deployment:** Vercel.
 
@@ -75,7 +76,8 @@ vercel.json            # Cấu hình Vercel Cron Jobs
 ### 🕯️ Trang chủ (Home Tab)
 - Hiển thị **5 câu hỏi hàng ngày** được pick ngẫu nhiên
 - Cho phép cả 2 người trả lời (chữ hoặc upload ảnh)
-- Hiển thị **streak 🔥** trong header (cập nhật khi cả 2 đều trả lời)
+- Hiển thị **streak 🔥** trong header (cập nhật khi cả 2 đều tương tác)
+- **Push notification** gửi khi partner trả lời hoặc upload ảnh
 - Tương tác realtime qua Supabase
 
 ### 📖 Lịch sử (History Tab)
@@ -95,11 +97,13 @@ vercel.json            # Cấu hình Vercel Cron Jobs
 ### ⏰ Đếm ngày (Countdown Tab)
 - Tạo kỷ niệm đặc biệt (sinh nhật, kỷ niệm, kế hoạch)
 - Đếm ngày đến / từ sự kiện
+- **Push notification** gửi khi partner cập nhật countdown
 
 ### 🌟 Danh sách (Bucket Tab)
 - To-do list chung cho cặp
 - Thêm, hoàn thành, xóa task
 - Gợi ý sẵn: "Đi du lịch", "Kỷ niệm tin tưởng", v.v.
+- **Push notification** gửi khi partner thêm item hoặc chấp nhận gợi ý
 
 ### 👤 Hồ sơ (Profile Tab)
 - Hiển thị thông tin 2 người (avatar, tên)
@@ -117,6 +121,12 @@ vercel.json            # Cấu hình Vercel Cron Jobs
 ### 📸 Image Compression (AlbumTab)
 - **Thư viện:** `browser-image-compression` (300KB target)
 - **Hiệu quả:** 5MB → 300KB, 1GB lưu 5000 ảnh, upload <1s
+
+### 🔥 Streak Logic Refinement (v2)
+- **Vấn đề:** Trước đó chỉ cộng streak khi CẢ 2 người trả lời Q&A
+- **Giải pháp:** Đổi thành "bất kỳ tương tác nào" (trả lời Q&A, upload ảnh, thêm bucket list, cập nhật countdown)
+- **Trigger:** `attemptStreakUpdate()` được gọi từ `submitMy()`, `submitPt()`, `uploadQuestionPhoto()`, `addItem()`, `addSuggestion()`, `handleSaveCountdown()`
+- **Logic:** Streak cộng khi cả 2 người đều có ít nhất 1 tương tác trong ngày
 
 ## 7. Hệ thống Email Reminder (Cron Job)
 
@@ -150,12 +160,38 @@ CRON_SECRET=<random_secret_here>
 APP_URL=https://datewnhi.vercel.app
 ```
 
-### 🚀 Setup Vercel
+### 🚀 Setup Vercel (Email)
 1. Thêm tất cả env vars vào **Vercel Dashboard > Settings > Environment Variables**
 2. `CRON_SECRET`: Tạo token ngẫu nhiên mạnh bằng `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 3. Deploy: `git push` - Vercel sẽ tự động trigger cron lúc 20:00 VN hàng ngày
 
-## 8. API/Services
+## 8. Hệ thống Push Notifications (OneSignal)
+
+### 📲 Tính năng
+- **Thời gian thực:** Nhận thông báo ngay khi partner trả lời / tương tác
+- **Các sự kiện trigger:**
+  - ✅ Partner trả lời câu hỏi
+  - ✅ Partner upload ảnh (đính ảnh vào câu trả lời)
+  - ✅ Partner thêm item vào bucket list
+  - ✅ Partner chấp nhận gợi ý bucket list
+  - ✅ Partner cập nhật countdown
+- **Link:** Bấm thông báo → Mở app ngay lập tức
+
+### 🔧 Integration
+- **SDK:** `react-onesignal` v3.5.1
+- **Setup:** 
+  - `index.html` load OneSignal SDK script
+  - `App.jsx` initialize OneSignal + request permission (showSlidedownPrompt)
+  - `coupleService.js` có hàm `sendPushNotification(targetUserId, message)` gửi qua REST API
+  - `HomeTab.jsx`, `MainApp.jsx` gọi hàm này khi trigger event
+
+### 📋 OneSignal Setup
+```
+App ID: 7602eae8-63b0-4fe5-92e4-5c13f3bac45f
+REST API Key: os_v2_app_oybov2ddwbh6lexelqj7howel6qlxz73qosux3u5borxecp4yt3brapgz55h6kw6xmmgwukww2otwl6msbza2zs5pjwtkpfcww662za
+```
+
+## 9. API/Services
 
 ### `lib/supabaseClient.js`
 - Cấu hình Supabase client (public key)
@@ -169,7 +205,7 @@ APP_URL=https://datewnhi.vercel.app
 - `saveCountdown()` - Lưu countdown info
 - `saveBucketItem()` - Thêm item to bucket list
 
-## 9. Local Storage Keys
+## 10. Local Storage Keys
 
 Mỗi cặp lưu dữ liệu local:
 ```
@@ -182,7 +218,7 @@ my_multi_${coupleCode}_${todayKey} // Multiple answers (nếu có)
 skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 ```
 
-## 10. Lộ trình Phát triển (Roadmap)
+## 11. Lộ trình Phát triển (Roadmap)
 
 ### ✅ Hoàn thành
 - ✅ Cấu trúc project & folder
@@ -191,6 +227,8 @@ skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 - ✅ Local storage & realtime sync
 - ✅ **Email reminder system** (20:00 VN mỗi ngày)
 - ✅ **Album:** Nén ảnh 5MB → 300KB, fullscreen view, long press delete
+- ✅ **Push Notifications:** OneSignal web notifications (Q&A, upload, bucket, countdown)
+- ✅ **Streak Logic:** Any interaction counts (not just Q&A)
 
 ### 🔄 Đang phát triển
 - Tối ưu performance
@@ -198,10 +236,9 @@ skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 
 ### 📅 Sắp tới
 - Social sharing (chia sẻ kỷ niệm)
-- Push notifications
 - Custom questions (tạo câu hỏi riêng)
 - Themes & personalization
 
 ---
 
-**Cập nhật lần cuối:** May 10, 2026 | **Email Reminder System v1.0 + Album Optimization** ✅
+**Cập nhật lần cuối:** May 10, 2026 | **Push Notifications v1.0 + Streak Logic Refinement** ✅

@@ -353,7 +353,7 @@ export async function sendPushNotification(targetUserId, message) {
       headings: { en: 'Lửa Nhỏ 🔥', vi: 'Lửa Nhỏ 🔥' },
       
       // ✅ PHẢI LÀ LINK WEB, KHÔNG ĐƯỢC DÙNG Ổ C:
-      chrome_web_icon: "https://datew-nhi.vercel.app//logo.jpg", 
+      chrome_web_icon: "https://datew-nhi.vercel.app/logo.jpg", 
       // Nếu chưa có link web, tạm thời hãy comment dòng icon này lại hoặc dùng link ảnh mạng
       // chrome_web_icon: "https://i.imgur.com/your-image-id.jpg" 
     })
