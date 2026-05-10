@@ -42,8 +42,8 @@ export default function LoginScreen({ onLogin }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 28 }}>
       <div style={{ width: "100%", maxWidth: 340, animation: "fadeUp 0.5s ease" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 60, animation: "hb 2.4s ease-in-out infinite" }}>🕯️</div>
-          <h1 style={{ fontSize: 38, fontWeight: 900, letterSpacing: -1.5, margin: "10px 0 6px", background: "linear-gradient(135deg,#ff6b9d,#ffd166,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundSize: "200%", animation: "shimmer 4s linear infinite" }}>lửa nhỏ</h1>
+          <div style={{ fontSize: 60, animation: "hb 2.4s ease-in-out infinite" }}>💌</div>
+          <h1 style={{ fontSize: 38, fontWeight: 900, letterSpacing: -1.5, margin: "10px 0 6px", background: "linear-gradient(135deg,#ff6b9d,#ffd166,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundSize: "200%", animation: "shimmer 4s linear infinite" }}>Góc nhỏ</h1>
           <p style={{ color: "#555", fontSize: 14, margin: 0 }}>Một câu hỏi mỗi ngày - mãi bên nhau</p>
         </div>
 
