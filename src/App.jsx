@@ -8,6 +8,8 @@ import CodeShare from "./screens/CodeShare";
 import MainApp from "./screens/MainApp/MainApp";
 import { getMyRoom, getSessionProfile, profileToUser, signOut, updateProfile } from "./lib/coupleService";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
+import OneSignal from 'react-onesignal';
+
 
 export default function App() {
   const [localUser, setLocalUser] = useLS("lhn_user", null);
@@ -21,6 +23,68 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
+    // 1. KHỞI TẠO ONESIGNAL (Chỉ chạy 1 lần khi mount)
+  import("react-onesignal").then((OneSignal) => {
+    OneSignal.default.init({
+      appId: "ID_APP_CUA_BAN", // 👈 Tùng thay ID thực tế vào đây nhé
+      allowLocalhostAsSecureOrigin: true,
+      notifyButton: { enable: false },
+    });
+  });
+
+  let mounted = true;
+  const timeout = window.setTimeout(() => {
+    if (!mounted) return;
+    setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra Supabase URL Configuration và thử tải lại trang.");
+    setBooting(false);
+  }, 12000);
+
+  const applySession = async (authUser = null) => {
+    try {
+      const { user: sessionUser, profile } = await getSessionProfile();
+      if (!mounted) return;
+
+      if (authUser && !profile) {
+        console.log("Đã có Auth nhưng chưa có Profile, chờ LoginScreen tạo nốt...");
+        return; 
+      }
+
+      const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
+      
+      if (!nextUser) {
+        setUser(null);
+        setCouple(null);
+        setLocalUser(null);
+        setLocalCouple(null);
+        setScreen("login");
+        return;
+      }
+
+      // 2. ĐỒNG BỘ ID VỚI ONESIGNAL
+      // Giúp OneSignal biết chính xác trình duyệt này là của Tùng (hoặc Nhi) để gửi tin cho đúng người
+      import("react-onesignal").then((OneSignal) => {
+        OneSignal.default.login(nextUser.id);
+      });
+
+      const room = await getMyRoom(nextUser);
+      if (!mounted) return;
+
+      setUser(nextUser);
+      setLocalUser(nextUser);
+      setCouple(room);
+      setLocalCouple(room);
+      
+      setScreen(room ? "app" : "setup");
+
+    } catch (error) {
+      console.error(error);
+      if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (mounted) setBooting(false);
+    }
+  };
+  
     let mounted = true;
     const timeout = window.setTimeout(() => {
       if (!mounted) return;

@@ -9,7 +9,8 @@ export function profileToUser(profile, authUser) {
     uid: profile?.id || authUser?.id,
     id: profile?.id || authUser?.id,
     email: profile?.email || authUser?.email || "",
-    // ✅ Ưu tiên lấy tên chuẩn trong DB, bỏ hẳn cái đuôi cắt email đi
+    // ✅ FIX: Bổ sung lấy dob cho user hiện tại
+    dob: profile?.dob || null, 
     name: profile?.display_name || authUser?.user_metadata?.full_name || "Bạn",
     avatar: profile?.avatar_url || authUser?.user_metadata?.avatar_url || null,
   };
@@ -22,7 +23,7 @@ export async function getSessionProfile() {
   const authUser = sessionData.session?.user;
   if (!authUser) return { user: null, profile: null };
 
-  // ✅ ĐỔI TỪ .single() THÀNH .maybeSingle()
+  // ✅ FIX: Chỗ này đã lấy select("*") nên nó sẽ tự động gom cả 'dob' về. Không cần sửa thêm ở đây.
   const { data: profile } = await supabase.from("profiles")
     .select("*").eq("id", authUser.id).maybeSingle();
 
@@ -65,6 +66,8 @@ export async function upsertProfile(authUser, patch = {}) {
     email: authUser.email,
     display_name: patch.display_name || authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "Bạn",
     avatar_url: patch.avatar_url ?? authUser.user_metadata?.avatar_url ?? null,
+    // ✅ FIX: Thêm upsert dob nếu có truyền vào
+    dob: patch.dob ?? null,
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabase.from("profiles").upsert(payload).select("*").single();
@@ -74,13 +77,21 @@ export async function upsertProfile(authUser, patch = {}) {
 
 export async function updateProfile(user, patch) {
   if (!isSupabaseConfigured) return { ...user, ...patch };
+  
+  const updateData = {
+    display_name: patch.name ?? user.name,
+    avatar_url: patch.avatar ?? user.avatar,
+    updated_at: new Date().toISOString(),
+  };
+  
+  // ✅ FIX: Bổ sung dob vào cục update nếu người dùng có sửa ngày sinh
+  if (patch.dob !== undefined) {
+    updateData.dob = patch.dob;
+  }
+
   const { data, error } = await supabase
     .from("profiles")
-    .update({
-      display_name: patch.name ?? user.name,
-      avatar_url: patch.avatar ?? user.avatar,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq("id", user.id)
     .select("*")
     .single();
@@ -145,6 +156,7 @@ async function roomToCouple(room, user) {
   const partnerId = room.user1_id === user.id ? room.user2_id : room.user1_id;
   let partnerProfile = null;
   if (partnerId) {
+    // ✅ FIX: Chỗ này là select("*") rồi nên nó lấy đủ dob của Partner luôn.
     const { data } = await supabase.from("profiles").select("*").eq("id", partnerId).maybeSingle();
     partnerProfile = data;
   }
@@ -153,11 +165,16 @@ async function roomToCouple(room, user) {
     roomId: room.id,
     coupleCode: room.invite_code,
     partnerName: partnerProfile?.display_name || "Đang chờ người ấy",
+    partnerAvatar: partnerProfile?.avatar_url || null,
+    // ✅ FIX: Đưa ngày sinh của partner vào để hiển thị cung hoàng đạo
+    partnerDob: partnerProfile?.dob || null, 
     partnerJoined: Boolean(partnerProfile),
     myName: user.name,
     role: room.user1_id === user.id ? "A" : "B",
     streakCount: room.streak_count || 0,
     lastDate: room.last_answer_date,
+    // ✅ FIX: Đưa ngày yêu nhau vào object couple
+    startDate: room.start_date || null,
     countdownTitle: room.countdown_title || "",
     countdownDate: room.countdown_date || "",
   };
@@ -208,9 +225,11 @@ function buildHistory(answers, userId) {
   return Object.values(grouped).filter((x) => x.myAnswer && x.partnerAnswer).slice(0, 30);
 }
 
-export async function saveAnswer({ roomId, userId, question, answer }) {
+// ✅ CẬP NHẬT HÀM LƯU CÂU TRẢ LỜI CÓ THÔNG BÁO
+export async function saveAnswer({ roomId, userId, userName, partnerId, question, answer }) {
   if (!isSupabaseConfigured) return;
   const dateKey = question.promptKey || getTodayKey();
+  
   const { error } = await supabase.from("answers").upsert(
     {
       room_id: roomId,
@@ -222,8 +241,17 @@ export async function saveAnswer({ roomId, userId, question, answer }) {
     },
     { onConflict: "room_id,user_id,date_key" },
   );
+
   if (error) throw error;
+  
+  // 1. Cập nhật Streak
   await refreshStreak(roomId);
+
+  // 2. 🔔 BẮN THÔNG BÁO CHO NGƯỜI KIA
+  // Nếu có ID người kia, gửi tin nhắn báo hiệu
+  if (partnerId) {
+    sendPushNotification(partnerId, `${userName} vừa trả lời câu hỏi: "${question.vi}" ✨`);
+  }
 }
 
 export async function refreshStreak(roomId) {
@@ -306,4 +334,41 @@ export function subscribeRoom(roomId, onChange) {
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "couple_rooms", filter: `id=eq.${roomId}` }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+// ✅ HÀM GỬI THÔNG BÁO QUA ONESIGNAL (ĐÃ FIX)
+export async function sendPushNotification(targetUserId, message) {
+  if (!targetUserId) return;
+
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Đảm bảo chữ Basic có dấu cách phía sau
+      'Authorization': 'Basic os_v2_app_oybov2ddwbh6lexelqj7howel6qlxz73qosux3u5borxecp4yt3brapgz55h6kw6xmmgwukww2otwl6msbza2zs5pjwtkpfcww662za' 
+    },
+    body: JSON.stringify({
+      app_id: '7602eae8-63b0-4fe5-92e4-5c13f3bac45f',
+      include_external_user_ids: [targetUserId],
+      contents: { en: message, vi: message },
+      headings: { en: 'Lửa Nhỏ 🔥', vi: 'Lửa Nhỏ 🔥' },
+      
+      // ✅ PHẢI LÀ LINK WEB, KHÔNG ĐƯỢC DÙNG Ổ C:
+      chrome_web_icon: "https://datew-nhi.vercel.app//logo.jpg", 
+      // Nếu chưa có link web, tạm thời hãy comment dòng icon này lại hoặc dùng link ảnh mạng
+      // chrome_web_icon: "https://i.imgur.com/your-image-id.jpg" 
+    })
+  };
+
+  try {
+    const res = await fetch('https://onesignal.com/api/v1/notifications', options);
+    const data = await res.json();
+    
+    if (data.errors) {
+      console.error("OneSignal báo lỗi:", data.errors);
+    } else {
+      console.log("Gửi thông báo thành công:", data);
+    }
+  } catch (err) {
+    console.error("Lỗi kết nối mạng:", err);
+  }
 }
