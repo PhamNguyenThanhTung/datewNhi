@@ -30,7 +30,10 @@ export default function App() {
         appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
         allowLocalhostAsSecureOrigin: true,
         notifyButton: { enable: false },
-      });
+      }).then(() => {
+        // 👇 THÊM DÒNG NÀY ĐỂ KÍCH HOẠT BẢNG XIN QUYỀN THÔNG BÁO
+        OneSignal.default.Slidedown.promptPush();
+      });;
     });
 
     const timeout = window.setTimeout(() => {
