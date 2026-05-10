@@ -295,15 +295,14 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
         )}
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
-        {/* Tìm đoạn này trong MainApp.jsx */}
-{tab === 'games' && (
+        {tab === 'games' && (
   <GamesTab 
     roomId={couple.id} 
     userId={user.id} 
     myName={user.name} 
     partnerName={couple.partnerName} 
-    // 👇 PHẢI LÀ DÒNG NÀY ĐỂ TÍNH TOÁN ID NGƯỜI ẤY TỪ DATABASE
-    partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id} 
+    // 👇 BẮT BUỘC PHẢI THÊM DÒNG NÀY ĐỂ LẤY ID NGƯỜI ẤY
+    partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id}
   />
 )}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}

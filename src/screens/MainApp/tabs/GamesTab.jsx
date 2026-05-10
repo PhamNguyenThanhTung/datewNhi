@@ -118,7 +118,6 @@ const s = {
 };
 
 export default function GamesTab({ roomId, userId, myName, partnerName, partnerId }) {
-  console.log("DEBUG - partnerId nhận được là:", partnerId);
   const [activeFeature, setActiveFeature] = useState(null);
   const activeF = FEATURES.find(f => f.id === activeFeature);
 
