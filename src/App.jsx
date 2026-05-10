@@ -8,8 +8,6 @@ import CodeShare from "./screens/CodeShare";
 import MainApp from "./screens/MainApp/MainApp";
 import { getMyRoom, getSessionProfile, profileToUser, signOut, updateProfile } from "./lib/coupleService";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
-import OneSignal from 'react-onesignal';
-
 
 export default function App() {
   const [localUser, setLocalUser] = useLS("lhn_user", null);
@@ -23,147 +21,94 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
-    // 1. KHỞI TẠO ONESIGNAL (Chỉ chạy 1 lần khi mount)
-  import("react-onesignal").then((OneSignal) => {
-    OneSignal.default.init({
-      appId: "ID_APP_CUA_BAN", // 👈 Tùng thay ID thực tế vào đây nhé
-      allowLocalhostAsSecureOrigin: true,
-      notifyButton: { enable: false },
-    });
-  });
-
-  let mounted = true;
-  const timeout = window.setTimeout(() => {
-    if (!mounted) return;
-    setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra Supabase URL Configuration và thử tải lại trang.");
-    setBooting(false);
-  }, 12000);
-
-  const applySession = async (authUser = null) => {
-    try {
-      const { user: sessionUser, profile } = await getSessionProfile();
-      if (!mounted) return;
-
-      if (authUser && !profile) {
-        console.log("Đã có Auth nhưng chưa có Profile, chờ LoginScreen tạo nốt...");
-        return; 
-      }
-
-      const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
-      
-      if (!nextUser) {
-        setUser(null);
-        setCouple(null);
-        setLocalUser(null);
-        setLocalCouple(null);
-        setScreen("login");
-        return;
-      }
-
-      // 2. ĐỒNG BỘ ID VỚI ONESIGNAL
-      // Giúp OneSignal biết chính xác trình duyệt này là của Tùng (hoặc Nhi) để gửi tin cho đúng người
-      import("react-onesignal").then((OneSignal) => {
-        OneSignal.default.login(nextUser.id);
-      });
-
-      const room = await getMyRoom(nextUser);
-      if (!mounted) return;
-
-      setUser(nextUser);
-      setLocalUser(nextUser);
-      setCouple(room);
-      setLocalCouple(room);
-      
-      setScreen(room ? "app" : "setup");
-
-    } catch (error) {
-      console.error(error);
-      if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
-    } finally {
-      window.clearTimeout(timeout);
-      if (mounted) setBooting(false);
-    }
-  };
-  
     let mounted = true;
+
+    // 1. KHỞI TẠO ONESIGNAL
+    import("react-onesignal").then((OneSignal) => {
+      OneSignal.default.init({
+        appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
+        allowLocalhostAsSecureOrigin: true,
+        notifyButton: { enable: false },
+      });
+    });
+
     const timeout = window.setTimeout(() => {
       if (!mounted) return;
-      setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra Supabase URL Configuration và thử tải lại trang.");
+      setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra kết nối mạng và thử lại.");
       setBooting(false);
     }, 12000);
 
+    // 2. HÀM XỬ LÝ ĐĂNG NHẬP (APPLY SESSION)
     const applySession = async (authUser = null) => {
-  try {
-    // 1. Lấy thông tin profile từ Database
-    const { user: sessionUser, profile } = await getSessionProfile();
-    if (!mounted) return;
-
-    // 🚨 THAY ĐỔI QUAN TRỌNG TẠI ĐÂY:
-    // Nếu có authUser (đã qua bước signUp) nhưng KHÔNG tìm thấy profile trong DB
-    // thì TUYỆT ĐỐI không được chuyển màn hình, cứ để LoginScreen nó làm việc.
-    if (authUser && !profile) {
-      console.log("Đã có Auth nhưng chưa có Profile, chờ LoginScreen tạo nốt...");
-      return; 
-    }
-
-    const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
-    
-    if (!nextUser) {
-      setUser(null);
-      setCouple(null);
-      setLocalUser(null);
-      setLocalCouple(null);
-      setScreen("login");
-      return;
-    }
-
-    const room = await getMyRoom(nextUser);
-    if (!mounted) return;
-
-    setUser(nextUser);
-    setLocalUser(nextUser);
-    setCouple(room);
-    setLocalCouple(room);
-    
-    // Chỉ chuyển màn hình khi thực sự có user hợp lệ
-    setScreen(room ? "app" : "setup");
-
-  } catch (error) {
-    console.error(error);
-    if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
-  } finally {
-    window.clearTimeout(timeout);
-    if (mounted) setBooting(false);
-  }
-};
-
-    const params = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const authError = params.get("error_description") || hashParams.get("error_description") || params.get("error") || hashParams.get("error");
-    if (authError) {
-      window.setTimeout(() => {
+      try {
+        const { user: sessionUser, profile } = await getSessionProfile();
         if (!mounted) return;
-        setBootError(authError);
-        setBooting(false);
-      }, 0);
-    } else {
-      applySession();
-    }
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => {
-        if (!mounted) return;
-        if (!session?.user) {
+        // Nếu đang trong quá trình đăng ký (có auth nhưng chưa có profile) thì chờ
+        if (authUser && !profile) {
+          console.log("Đang chờ khởi tạo profile...");
+          return; 
+        }
+
+        const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
+        
+        if (!nextUser) {
           setUser(null);
           setCouple(null);
           setLocalUser(null);
           setLocalCouple(null);
           setScreen("login");
-          setBooting(false);
           return;
         }
-        applySession(session.user);
-      }, 0);
+
+        // Đồng bộ ID với OneSignal để nhận thông báo chuẩn
+        import("react-onesignal").then((OneSignal) => {
+          OneSignal.default.login(nextUser.id);
+        });
+
+        const room = await getMyRoom(nextUser);
+        if (!mounted) return;
+
+        setUser(nextUser);
+        setLocalUser(nextUser);
+        setCouple(room);
+        setLocalCouple(room);
+        
+        setScreen(room ? "app" : "setup");
+
+      } catch (error) {
+        console.error("Lỗi Apply Session:", error);
+        if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
+      } finally {
+        window.clearTimeout(timeout);
+        if (mounted) setBooting(false);
+      }
+    };
+
+    // 3. XỬ LÝ AUTH STATE CHANGE & URL PARAMS
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authError = params.get("error_description") || hashParams.get("error_description") || params.get("error") || hashParams.get("error");
+    
+    if (authError) {
+      setBootError(authError);
+      setBooting(false);
+    } else {
+      applySession();
+    }
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      if (!session?.user) {
+        setUser(null);
+        setCouple(null);
+        setLocalUser(null);
+        setLocalCouple(null);
+        setScreen("login");
+        setBooting(false);
+        return;
+      }
+      applySession(session.user);
     });
 
     return () => {
