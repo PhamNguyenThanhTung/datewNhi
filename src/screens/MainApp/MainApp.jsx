@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import Avatar from "../../components/Avatar";
 import useLS from "../../hooks/useLS";
-import { getDailyQuestions, getTodayKey } from "../../data/questions";
+import { getTodayKey } from "../../data/questions";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, subscribeRoom, toggleBucketItem, uploadMemory } from "../../lib/coupleService";
+import { useDailyPrompts } from "../../hooks/useDailyPrompts";
+
 import HomeTab from "./tabs/HomeTab";
 import HistoryTab from "./tabs/HistoryTab";
 import BucketTab from "./tabs/BucketTab";
@@ -14,8 +16,10 @@ import CountdownTab from "./tabs/CountdownTab";
 export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const [tab, setTab] = useState("home");
   const todayKey = getTodayKey();
-  const dailyQuestions = getDailyQuestions(5);
   const roomId = couple.roomId || couple.id || couple.coupleCode;
+
+  // 🚀 Lấy câu hỏi từ Edge Function (hoặc fallback local)
+  const { questions: dailyPrompts, loading: promptsLoading } = useDailyPrompts(roomId);
 
   const [localMyAns, setLocalMyAns] = useLS(`my_${couple.coupleCode}_${todayKey}`, "");
   const [localPtAns, setLocalPtAns] = useLS(`pt_${couple.coupleCode}_${todayKey}`, "");
@@ -228,6 +232,18 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     { id: "profile", icon: "👤", label: "Hồ sơ" },
   ];
 
+  // 🕯️ Màn hình Loading khi đợi câu hỏi từ server
+  if (promptsLoading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0a12", color: "#ff6b9d" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 20, animation: "pulse 1.5s infinite" }}>🕯️</div>
+          <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1 }}>ĐANG THẮP LỬA...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 440, margin: "0 auto", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "13px 18px 11px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(24px)", position: "sticky", top: 0, zIndex: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -254,7 +270,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
             Đang chờ người ấy nhập mã phòng. Khi họ tham gia, tên profile của họ sẽ tự hiện ở đây.
           </div>
         )}
-        {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyQuestions} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
+        {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
         {tab === "countdown" && <CountdownTab countdown={countdown} onSave={handleSaveCountdown} />}

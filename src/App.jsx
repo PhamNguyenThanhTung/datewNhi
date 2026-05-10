@@ -29,33 +29,49 @@ export default function App() {
     }, 12000);
 
     const applySession = async (authUser = null) => {
-      try {
-        const { user: sessionUser, profile } = await getSessionProfile();
-        if (!mounted) return;
-        const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
-        if (!nextUser) {
-          setUser(null);
-          setCouple(null);
-          setLocalUser(null);
-          setLocalCouple(null);
-          setScreen("login");
-          return;
-        }
-        const room = await getMyRoom(nextUser);
-        if (!mounted) return;
-        setUser(nextUser);
-        setLocalUser(nextUser);
-        setCouple(room);
-        setLocalCouple(room);
-        setScreen(room ? "app" : "setup");
-      } catch (error) {
-        console.error(error);
-        if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
-      } finally {
-        window.clearTimeout(timeout);
-        if (mounted) setBooting(false);
-      }
-    };
+  try {
+    // 1. Lấy thông tin profile từ Database
+    const { user: sessionUser, profile } = await getSessionProfile();
+    if (!mounted) return;
+
+    // 🚨 THAY ĐỔI QUAN TRỌNG TẠI ĐÂY:
+    // Nếu có authUser (đã qua bước signUp) nhưng KHÔNG tìm thấy profile trong DB
+    // thì TUYỆT ĐỐI không được chuyển màn hình, cứ để LoginScreen nó làm việc.
+    if (authUser && !profile) {
+      console.log("Đã có Auth nhưng chưa có Profile, chờ LoginScreen tạo nốt...");
+      return; 
+    }
+
+    const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
+    
+    if (!nextUser) {
+      setUser(null);
+      setCouple(null);
+      setLocalUser(null);
+      setLocalCouple(null);
+      setScreen("login");
+      return;
+    }
+
+    const room = await getMyRoom(nextUser);
+    if (!mounted) return;
+
+    setUser(nextUser);
+    setLocalUser(nextUser);
+    setCouple(room);
+    setLocalCouple(room);
+    
+    // Chỉ chuyển màn hình khi thực sự có user hợp lệ
+    setScreen(room ? "app" : "setup");
+
+  } catch (error) {
+    console.error(error);
+    if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
+  } finally {
+    window.clearTimeout(timeout);
+    if (mounted) setBooting(false);
+  }
+};
 
     const params = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));

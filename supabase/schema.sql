@@ -124,13 +124,6 @@ using (exists (
   where r.id = bucket_list.room_id and (r.user1_id = auth.uid() or r.user2_id = auth.uid())
 ));
 
-create policy "members can delete bucket"
-on public.bucket_list for delete to authenticated
-using (exists (
-  select 1 from public.couple_rooms r
-  where r.id = bucket_list.room_id and (r.user1_id = auth.uid() or r.user2_id = auth.uid())
-));
-
 create policy "members can read memories"
 on public.memories for select to authenticated
 using (exists (
@@ -195,3 +188,17 @@ begin
   alter publication supabase_realtime add table public.couple_rooms;
 exception when duplicate_object then null;
 end $$;
+-- 1. Cho phép mọi người (kể cả chưa đăng nhập) được Đọc bảng profiles
+CREATE POLICY "Cho phép đọc công khai" 
+ON profiles FOR SELECT 
+TO anon 
+USING (true);
+
+-- 2. Cho phép mọi người được Thêm mới vào bảng profiles
+CREATE POLICY "Cho phép tạo profile mới" 
+ON profiles FOR INSERT 
+TO anon 
+WITH CHECK (true);
+
+-- 3. Đảm bảo bảng profiles đã bật RLS (thường là bật sẵn rồi)
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;

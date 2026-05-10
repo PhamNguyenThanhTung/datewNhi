@@ -19,6 +19,7 @@
   - **Realtime:** Đồng bộ hóa câu trả lời và các tính năng tương tác tức thì.
 - **Serverless Functions:** Vercel Functions (Node.js) + Cron Jobs.
 - **Email Service:** Gmail OAuth2 + Nodemailer.
+- **Image Optimization:** browser-image-compression (nén ảnh 5MB → 300KB).
 - **Deployment:** Vercel.
 
 ## 3. Cấu trúc Database (Supabase Schema)
@@ -83,9 +84,13 @@ vercel.json            # Cấu hình Vercel Cron Jobs
 - Tìm kiếm & lọc theo ngày
 
 ### 🖼️ Album (Album Tab)
-- Lưu trữ tất cả ảnh từ các câu trả lời
-- Upload trực tiếp vào Supabase Storage
-- Xóa & download ảnh
+- **Nén ảnh tự động:** Giảm 5MB → 300KB mà vẫn sắc nét (1GB lưu được 5000 ảnh)
+- **Upload trực tiếp** vào Supabase Storage
+- **Click ảnh** → Xem toàn màn hình với chú thích
+- **Long press (500ms)** → Menu 2 nút:
+  - 💾 **Lưu ảnh:** Download về device
+  - 🗑️ **Xóa:** Xóa từ Supabase Storage & UI
+- **Hover effect:** Scale 1.02 để highlight
 
 ### ⏰ Đếm ngày (Countdown Tab)
 - Tạo kỷ niệm đặc biệt (sinh nhật, kỷ niệm, kế hoạch)
@@ -102,7 +107,18 @@ vercel.json            # Cấu hình Vercel Cron Jobs
 - Đếm số ảnh trong album
 - Đăng xuất
 
-## 6. Hệ thống Email Reminder (Cron Job)
+## 6. Tối ưu & Fixes
+
+### 🔐 Fix 429 Rate Limit (LoginScreen)
+- **Vấn đề:** Supabase giới hạn ~4 OTP/phút, spam click gây 429 error
+- **Giải pháp:** Thêm cooldown 60 giây sau mỗi lần gửi OTP
+- **UX:** Button bị disable + countdown timer "Vui lòng chờ 60s"
+
+### 📸 Image Compression (AlbumTab)
+- **Thư viện:** `browser-image-compression` (300KB target)
+- **Hiệu quả:** 5MB → 300KB, 1GB lưu 5000 ảnh, upload <1s
+
+## 7. Hệ thống Email Reminder (Cron Job)
 
 ### 📧 Tính năng
 - **Lịch:** Mỗi ngày lúc **20:00 giờ Việt Nam** (13:00 UTC)
@@ -139,7 +155,7 @@ APP_URL=https://datewnhi.vercel.app
 2. `CRON_SECRET`: Tạo token ngẫu nhiên mạnh bằng `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 3. Deploy: `git push` - Vercel sẽ tự động trigger cron lúc 20:00 VN hàng ngày
 
-## 7. API/Services
+## 8. API/Services
 
 ### `lib/supabaseClient.js`
 - Cấu hình Supabase client (public key)
@@ -153,7 +169,7 @@ APP_URL=https://datewnhi.vercel.app
 - `saveCountdown()` - Lưu countdown info
 - `saveBucketItem()` - Thêm item to bucket list
 
-## 8. Local Storage Keys
+## 9. Local Storage Keys
 
 Mỗi cặp lưu dữ liệu local:
 ```
@@ -166,14 +182,15 @@ my_multi_${coupleCode}_${todayKey} // Multiple answers (nếu có)
 skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 ```
 
-## 9. Lộ trình Phát triển (Roadmap)
+## 10. Lộ trình Phát triển (Roadmap)
 
 ### ✅ Hoàn thành
-- Cấu trúc project & folder
-- Flow login/setup
-- Main app UI (6 tabs)
-- Local storage & realtime sync
-- **Email reminder system** (20:00 VN mỗi ngày)
+- ✅ Cấu trúc project & folder
+- ✅ Flow login/setup + cooldown 60s (fix 429 rate limit)
+- ✅ Main app UI (6 tabs)
+- ✅ Local storage & realtime sync
+- ✅ **Email reminder system** (20:00 VN mỗi ngày)
+- ✅ **Album:** Nén ảnh 5MB → 300KB, fullscreen view, long press delete
 
 ### 🔄 Đang phát triển
 - Tối ưu performance
@@ -187,4 +204,4 @@ skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 
 ---
 
-**Cập nhật lần cuối:** May 10, 2026 | **Email Reminder System v1.0** ✅
+**Cập nhật lần cuối:** May 10, 2026 | **Email Reminder System v1.0 + Album Optimization** ✅

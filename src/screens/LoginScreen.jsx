@@ -1,84 +1,198 @@
 import { useState } from "react";
-import { signInWithGoogle, signInWithMagicLink } from "../lib/coupleService";
-import { isSupabaseConfigured } from "../lib/supabaseClient";
-import { BS, GB, IS } from "../styles/global";
+import { supabase } from "../lib/supabaseClient";
+import { BS, IS, GB } from "../styles/global";
+
+// Mật khẩu ẩn dùng chung để bypass hệ thống Auth
+const DUMMY_PASSWORD = "ChamApp@Password123";
 
 export default function LoginScreen({ onLogin }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0); 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [roomCodeInput, setRoomCodeInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [authUser, setAuthUser] = useState(null); // Lưu user auth
 
-  const googleLogin = async () => {
-    setLoading(true);
-    setNotice("");
+  // Bước 1: Nhập Email và thử Đăng nhập
+  const handleCheckEmail = async () => {
+    if (!email.includes("@") || loading) return;
+    setLoading(true); setError("");
+    
     try {
-      const result = await signInWithGoogle();
-      if (result.demo) onLogin({ email: "demo@gmail.com", name: "Bạn", avatar: null, uid: "demo@gmail.com", id: "demo@gmail.com" });
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setLoading(false);
-    }
+      const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: DUMMY_PASSWORD
+      });
+
+      if (data?.user) {
+        setAuthUser(data.user); // Lưu lại authUser
+        
+        // Lấy profile (Dùng maybeSingle để tránh lỗi 406 nếu chưa có profile)
+        const { data: profile } = await supabase.from("profiles")
+          .select("*").eq("id", data.user.id).maybeSingle();
+
+        // 🚨 CHẶN ĐỨNG TẠI ĐÂY: Có tài khoản Auth nhưng chưa có Tên thì phải đi nhập tên!
+        if (!profile || !profile.display_name) {
+          setStep(1); 
+          return;
+        }
+
+        // Nếu đã có tên đàng hoàng, kiểm tra xem có phòng chưa
+        const { data: room } = await supabase.from("couple_rooms")
+          .select("*")
+          .or(`user1_id.eq.${data.user.id},user2_id.eq.${data.user.id}`)
+          .maybeSingle();
+
+        if (room) {
+          onLogin({ id: data.user.id, email: profile.email, name: profile.display_name, roomId: room.id });
+        } else {
+          setName(profile.display_name); // Gắn sẵn tên để khỏi lỗi
+          setStep(2); // Đi chọn phòng
+        }
+      } else {
+        // Tài khoản hoàn toàn chưa tồn tại -> Nhập tên
+        setStep(1);
+      }
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
   };
 
-  const emailLogin = async () => {
-    if (!email.includes("@") || !name.trim()) return;
-    setLoading(true);
-    setNotice("");
+  // Bước 2: Tạo tài khoản (hoặc Cập nhật tên cho tài khoản bị thiếu)
+  const handleCreateAccount = async () => {
+    if (!name.trim() || loading) return;
+    setLoading(true); setError("");
+
     try {
-      const result = await signInWithMagicLink(email, name.trim());
-      if (result.demo) onLogin({ email, name: name.trim(), avatar: null, uid: email, id: email });
-      else setNotice("Đã gửi Magic Link. Mở email trên điện thoại này để đăng nhập.");
-    } catch (error) {
-      setNotice(error.message);
-    } finally {
-      setLoading(false);
-    }
+      const targetEmail = email.trim().toLowerCase();
+      const displayName = name.trim(); 
+      
+      let currentUser = authUser;
+
+      // Nếu là user mới tinh (chưa có authUser từ Bước 1) thì mới chạy signUp
+      if (!currentUser) {
+        const { data, error: signUpErr } = await supabase.auth.signUp({
+          email: targetEmail,
+          password: DUMMY_PASSWORD
+        });
+        if (signUpErr) throw signUpErr;
+
+        if (data?.user?.identities?.length === 0) {
+          setError("Email này đang bị kẹt ở hệ thống. Hãy vào tab Users của Supabase xóa nó đi nhé!");
+          setLoading(false);
+          return; 
+        }
+        currentUser = data.user;
+        setAuthUser(currentUser); // Cập nhật lại state
+      }
+
+      // Dù là tạo mới hay bổ sung tên, đều chạy Upsert để lưu tên chuẩn xác vào DB
+      const { error: profileErr } = await supabase.from("profiles").upsert({
+        id: currentUser.id,
+        email: targetEmail,
+        display_name: displayName 
+      });
+      if (profileErr) throw profileErr;
+
+      setStep(2); // Chuyển sang chọn phòng
+    } catch (err) { 
+        setError("Không thể lưu tên: " + err.message); 
+        console.error(err);
+    } 
+    finally { setLoading(false); }
+  };
+
+  // Bước 3A: Tạo phòng mới
+  const handleCreateRoom = async () => {
+    setLoading(true); setError("");
+    try {
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // ✅ Đảm bảo lấy tên chính xác
+      const displayName = name.trim() || authUser?.email?.split("@")[0] || "Bạn";
+      
+      // Tạo phòng (Dùng đúng cột invite_code và user1_id của DB)
+      const { data: room, error: rErr } = await supabase.from("couple_rooms")
+        .insert([{ invite_code: code, user1_id: authUser.id }])
+        .select().single();
+      
+      if (rErr) throw rErr;
+      
+      onLogin({ id: authUser.id, email, name: displayName, roomId: room.id });
+    } catch (err) { setError("Không thể tạo phòng."); } 
+    finally { setLoading(false); }
+  };
+
+  // Bước 3B: Nhập mã phòng người yêu (invite_code)
+  const handleJoinRoom = async () => {
+    if (!roomCodeInput.trim() || loading) return;
+    setLoading(true); setError("");
+    try {
+      const inputCode = roomCodeInput.trim().toUpperCase();
+      
+      // 1. Tìm phòng theo invite_code
+      const { data: room, error: findErr } = await supabase.from("couple_rooms")
+        .select("*").eq("invite_code", inputCode).single();
+        
+      if (!room || findErr) { setError("Sai mã phòng mất rồi!"); return; }
+
+      // 2. Cập nhật user2_id thành id của mình
+      const { error: updateErr } = await supabase.from("couple_rooms")
+        .update({ user2_id: authUser.id })
+        .eq("id", room.id);
+        
+      if (updateErr) throw updateErr;
+
+      // ✅ Đảm bảo lấy tên chính xác
+      const displayName = name.trim() || authUser?.email?.split("@")[0] || "Bạn";
+      onLogin({ id: authUser.id, email, name: displayName, roomId: room.id });
+    } catch (err) { setError("Không thể tham gia phòng."); } 
+    finally { setLoading(false); }
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", padding: 28 }}>
-      <div style={{ width: "100%", maxWidth: 340, animation: "fadeUp 0.5s ease" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 60, animation: "hb 2.4s ease-in-out infinite" }}>💌</div>
-          <h1 style={{ fontSize: 38, fontWeight: 900, letterSpacing: -1.5, margin: "10px 0 6px", background: "linear-gradient(135deg,#ff6b9d,#ffd166,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundSize: "200%", animation: "shimmer 4s linear infinite" }}>Góc nhỏ</h1>
-          <p style={{ color: "#555", fontSize: 14, margin: 0 }}>Một câu hỏi mỗi ngày - mãi bên nhau</p>
-        </div>
-
+      <div style={{ width: "100%", maxWidth: 340 }}>
+        
         {step === 0 && (
-          <>
-            <button onClick={googleLogin} disabled={loading} style={{ width: "100%", padding: "14px 20px", borderRadius: 14, background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 15, fontWeight: 700, color: "#3c4043", boxShadow: "0 2px 24px rgba(0,0,0,0.35)", marginBottom: 18, fontFamily: "inherit", opacity: loading ? 0.85 : 1 }}>
-              {loading ? <div style={{ width: 20, height: 20, border: "2px solid #ddd", borderTopColor: "#4285f4", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> : "G"}
-              {loading ? "Đang đăng nhập..." : isSupabaseConfigured ? "Đăng nhập với Google" : "Demo Google"}
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <h2 style={{ textAlign: 'center', color: '#ff6b9d', marginBottom: 20 }}>Góc Nhỏ 💌</h2>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleCheckEmail()} type="email" placeholder="Gmail của bạn..." style={{...IS, marginBottom: 16}} />
+            <button onClick={handleCheckEmail} disabled={loading} style={BS("linear-gradient(135deg,#ff6b9d,#a78bfa)")}>
+              {loading ? "Đang tải..." : "Tiếp tục ✨"}
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.07)" }} /><span style={{ color: "#444", fontSize: 12 }}>hoặc email</span><div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.07)" }} />
-            </div>
-            <button onClick={() => setStep(1)} style={{ ...BS("rgba(255,255,255,0.07)"), boxShadow: "none", border: "1px solid rgba(255,255,255,0.08)", color: "#888" }}>📧 Dùng email</button>
-          </>
+          </div>
         )}
 
         {step === 1 && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>Địa chỉ email</div>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && email.includes("@") && setStep(2)} type="email" placeholder="email@gmail.com" style={{ ...IS, marginBottom: 10 }} autoFocus />
-            <button onClick={() => email.includes("@") && setStep(2)} style={BS("linear-gradient(135deg,#ff6b9d,#a78bfa)")}>Tiếp tục →</button>
-            <button onClick={() => setStep(0)} style={GB}>← Quay lại</button>
+            <p style={{ color: '#888', textAlign: 'center' }}>Người ấy gọi bạn là gì nhỉ? 🤔</p>
+            <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleCreateAccount()} placeholder="Tên của bạn..." style={{...IS, marginBottom: 16}} />
+            <button onClick={handleCreateAccount} disabled={loading} style={BS("#ff6b9d")}>
+              {loading ? "Đang tạo..." : "Xác nhận tên"}
+            </button>
           </div>
         )}
 
         {step === 2 && (
-          <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>Tên hiển thị của bạn</div>
-            <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && emailLogin()} placeholder="Tên của bạn..." style={{ ...IS, marginBottom: 10 }} autoFocus />
-            <button onClick={emailLogin} disabled={loading} style={BS("linear-gradient(135deg,#ff6b9d,#a78bfa)")}>{isSupabaseConfigured ? "Gửi Magic Link ✨" : "Vào app demo ✨"}</button>
-            <button onClick={() => setStep(1)} style={GB}>← Quay lại</button>
+          <div style={{ animation: "fadeUp 0.3s ease", textAlign: 'center' }}>
+            <p style={{ color: '#ff6b9d', fontWeight: 'bold' }}>Sắp xong rồi! 🚀</p>
+            <button onClick={handleCreateRoom} disabled={loading} style={{...BS("linear-gradient(135deg,#ff6b9d,#ffd166)"), marginBottom: 15}}>🏠 Tạo phòng mới</button>
+            <div style={{ color: '#444', fontSize: 12, marginBottom: 15 }}>— hoặc —</div>
+            <button onClick={() => setStep(3)} style={GB}>🔑 Nhập mã người ấy gửi</button>
           </div>
         )}
 
-        {notice && <div style={{ color: notice.includes("Đã gửi") ? "#60efff" : "#ff8e53", fontSize: 13, textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>{notice}</div>}
+        {step === 3 && (
+          <div style={{ animation: "fadeUp 0.3s ease" }}>
+            <p style={{ color: '#888', textAlign: 'center' }}>Dán mã phòng vào đây nhé:</p>
+            <input value={roomCodeInput} onChange={(e) => setRoomCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()} placeholder="Mã phòng (VD: A1B2C3)" style={{...IS, marginBottom: 16}} />
+            <button onClick={handleJoinRoom} disabled={loading} style={BS("#a78bfa")}>Kết nối ngay 💌</button>
+            <button onClick={() => setStep(2)} style={{...GB, marginTop: 10}}>Quay lại</button>
+          </div>
+        )}
+
+        {error && <div style={{ color: "#ff8e53", fontSize: 13, textAlign: "center", marginTop: 14 }}>{error}</div>}
       </div>
     </div>
   );

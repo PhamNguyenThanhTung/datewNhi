@@ -9,7 +9,8 @@ export function profileToUser(profile, authUser) {
     uid: profile?.id || authUser?.id,
     id: profile?.id || authUser?.id,
     email: profile?.email || authUser?.email || "",
-    name: profile?.display_name || authUser?.user_metadata?.full_name || authUser?.email?.split("@")[0] || "Bạn",
+    // ✅ Ưu tiên lấy tên chuẩn trong DB, bỏ hẳn cái đuôi cắt email đi
+    name: profile?.display_name || authUser?.user_metadata?.full_name || "Bạn",
     avatar: profile?.avatar_url || authUser?.user_metadata?.avatar_url || null,
   };
 }
@@ -20,7 +21,11 @@ export async function getSessionProfile() {
   if (sessionError) throw sessionError;
   const authUser = sessionData.session?.user;
   if (!authUser) return { user: null, profile: null };
-  const profile = await upsertProfile(authUser);
+
+  // ✅ ĐỔI TỪ .single() THÀNH .maybeSingle()
+  const { data: profile } = await supabase.from("profiles")
+    .select("*").eq("id", authUser.id).maybeSingle();
+
   return { user: profileToUser(profile, authUser), profile };
 }
 
