@@ -295,7 +295,16 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
         )}
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
-        {tab === 'games' && (<GamesTab roomId={couple.id} userId={user.id} myName={user.name} partnerName={couple.partnerName} partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id} />)}
+        {tab === 'games' && (
+  <GamesTab 
+    roomId={couple.id} 
+    userId={user.id} 
+    myName={user.name} 
+    partnerName={couple.partnerName} 
+    // 👇 BẮT BUỘC PHẢI THÊM DÒNG NÀY ĐỂ LẤY ID NGƯỜI ẤY
+    partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id}
+  />
+)}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
         {tab === "countdown" && <CountdownTab countdown={countdown} onSave={handleSaveCountdown} />}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}

@@ -221,7 +221,7 @@ export default function HomeTab({ user, couple, questions, myAnswers, partnerAns
                     onClick={() => handleAnswerSubmit(question)} 
                     style={{ width: "100%", background: "linear-gradient(135deg, #8bc6ff 0%, #a78bfa 100%)", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 14, fontWeight: 800, marginTop: 14, cursor: "pointer" }}
                   >
-                    Gửi & Thông báo cho Nhi 🔔
+                    Gửi & Thông báo cho người ấy 🔔
                   </button>
                   
                   <button onClick={() => skipQuestion(question.promptKey)} style={{ background: "transparent", border: "none", color: "#555", fontSize: 12, cursor: "pointer", width: "100%", padding: "12px", fontWeight: 600 }}>Bỏ qua câu này</button>

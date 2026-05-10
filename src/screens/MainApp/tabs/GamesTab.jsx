@@ -88,7 +88,7 @@ const s = {
   }),
   featureArrow: { color: '#555', fontSize: 18, flexShrink: 0 },
 
-  // Back header
+  // Back header (Giữ nguyên của Tùng)
   backBar: {
     padding: '12px 16px',
     display: 'flex',
@@ -113,37 +113,40 @@ const s = {
     flexShrink: 0,
   },
   backTitle: { color: '#fff', fontWeight: 700, fontSize: 16 },
-  featureContent: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  featureContent: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' },
   inviteBtn: { background: 'linear-gradient(135deg, #ff6b9d, #a78bfa)', border: 'none', borderRadius: 99, padding: '8px 16px', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', marginTop: 12, boxShadow: '0 4px 12px rgba(255,107,157,0.3)' }
 };
 
 export default function GamesTab({ roomId, userId, myName, partnerName, partnerId }) {
   const [activeFeature, setActiveFeature] = useState(null);
   const activeF = FEATURES.find(f => f.id === activeFeature);
-  const current = FEATURES.find(f => f.id === activeFeature);
 
-  // Hàm gọi Nhi vào chơi
+  // ✅ Hàm gọi Nhi vào chơi
   const handleInvite = () => {
     if (partnerId) {
       sendPushNotification(partnerId, `${myName} đang đợi ${partnerName} ở Góc Vui nè! Vào chơi thôi! 🎮✨`);
       alert(`Đã rung chuông gọi ${partnerName} thành công!`);
+    } else {
+      alert(`Người ấy (${partnerName}) chưa tham gia phòng nên không thể gọi được đâu Tùng ơi!`);
     }
   };
 
+  // ✅ Hiển thị Game với CSS chuẩn của Tùng
   if (activeFeature) {
     return (
-      <div style={s.activeWrap}>
-        <div style={s.activeHeader}>
+      <div style={s.wrap}>
+        <div style={s.backBar}>
           <button style={s.backBtn} onClick={() => setActiveFeature(null)}>←</button>
-          <div style={s.activeTitle}>{activeF?.emoji} {activeF?.label}</div>
+          <div style={s.backTitle}>{activeF?.emoji} {activeF?.label}</div>
         </div>
-        <div style={s.activeContent}>
+        
+        <div style={s.featureContent}>
           {activeFeature === 'draw_together' && <DrawTogether roomId={roomId} userId={userId} partnerName={partnerName} />}
           {activeFeature === 'draw_guess' && <DrawAndGuess roomId={roomId} userId={userId} partnerName={partnerName} />}
           {activeFeature === 'love_note' && <LoveNote roomId={roomId} userId={userId} myName={myName} partnerName={partnerName} />}
           {activeFeature === 'thumb_kiss' && <ThumbKiss roomId={roomId} userId={userId} partnerName={partnerName} />}
           
-          {/* ✅ TRUYỀN THÊM partnerId VÀ myName XUỐNG POKES */}
+          {/* TRUYỀN partnerId VÀ myName XUỐNG POKES */}
           {activeFeature === 'pokes' && (
             <Pokes roomId={roomId} userId={userId} partnerName={partnerName} partnerId={partnerId} myName={myName} />
           )}
@@ -152,6 +155,7 @@ export default function GamesTab({ roomId, userId, myName, partnerName, partnerI
     );
   }
 
+  // ✅ Hiển thị Menu chính
   return (
     <div style={s.wrap}>
       <div style={s.hubWrap}>
@@ -159,15 +163,21 @@ export default function GamesTab({ roomId, userId, myName, partnerName, partnerI
           <div style={s.hubTitle}>🎮 Góc Vui</div>
           <div style={s.hubSub}>Kết nối với {partnerName} theo những cách thú vị~</div>
           
-          {/* ✅ NÚT RUNG CHUÔNG GỌI NGƯỜI ẤY */}
+          {/* NÚT RUNG CHUÔNG GỌI NGƯỜI ẤY */}
           <button style={s.inviteBtn} onClick={handleInvite}>
             🔔 Gọi {partnerName} vào chơi
           </button>
-
         </div>
+        
         <div style={s.hubGrid}>
           {FEATURES.map(f => (
-            <div key={f.id} style={s.featureCard(f.color)} onClick={() => setActiveFeature(f.id)}>
+            <div 
+              key={f.id} 
+              style={s.featureCard(f.color)} 
+              onClick={() => setActiveFeature(f.id)}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.01)'; e.currentTarget.style.borderColor = `${f.color}60`; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = `${f.color}30`; }}
+            >
               <div style={s.featureEmoji}>{f.emoji}</div>
               <div style={s.featureInfo}>
                 <div style={s.featureLabel}>{f.label}</div>

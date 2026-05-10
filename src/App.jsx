@@ -6,9 +6,12 @@ import LoginScreen from "./screens/LoginScreen";
 import SetupScreen from "./screens/SetupScreen";
 import CodeShare from "./screens/CodeShare";
 import MainApp from "./screens/MainApp/MainApp";
-
 import { getMyRoom, getSessionProfile, profileToUser, signOut, updateProfile } from "./lib/coupleService";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
+import OneSignal from 'react-onesignal'; 
+
+// ✅ 1. THÊM BIẾN NÀY NẰM BÊN NGOÀI COMPONENT APP
+let isOneSignalInitialized = false; 
 
 export default function App() {
   const [localUser, setLocalUser] = useLS("lhn_user", null);
@@ -24,17 +27,32 @@ export default function App() {
 
     let mounted = true;
 
-    // 1. KHỞI TẠO ONESIGNAL
-    import("react-onesignal").then((OneSignal) => {
-      OneSignal.default.init({
-        appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
-        allowLocalhostAsSecureOrigin: true,
-        notifyButton: { enable: false },
-      }).then(() => {
-        // 👇 THÊM DÒNG NÀY ĐỂ KÍCH HOẠT BẢNG XIN QUYỀN THÔNG BÁO
-        OneSignal.default.Slidedown.promptPush();
-      });;
-    });
+    // ✅ 2. SỬA LẠI HÀM KHỞI TẠO NÀY
+    const initOneSignal = async () => {
+      try {
+        // Chỉ chạy nếu biến cờ ở ngoài vẫn là false
+        if (!isOneSignalInitialized) {
+          isOneSignalInitialized = true; // Đánh dấu là đã chạy để chặn lần thứ 2
+
+          await OneSignal.init({
+            appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
+            allowLocalhostAsSecureOrigin: true,
+            notifyButton: { enable: false },
+          });
+          
+          if (OneSignal.Slidedown) {
+            OneSignal.Slidedown.promptPush();
+          }
+        }
+      } catch (error) {
+        // Bỏ qua lỗi đã init nếu có lọt qua
+        if (error.message !== "SDK already initialized") {
+          console.warn("OneSignal cảnh báo:", error);
+        }
+      }
+    };
+    
+    initOneSignal();
 
     const timeout = window.setTimeout(() => {
       if (!mounted) return;
@@ -42,13 +60,11 @@ export default function App() {
       setBooting(false);
     }, 12000);
 
-    // 2. HÀM XỬ LÝ ĐĂNG NHẬP (APPLY SESSION)
     const applySession = async (authUser = null) => {
       try {
         const { user: sessionUser, profile } = await getSessionProfile();
         if (!mounted) return;
 
-        // Nếu đang trong quá trình đăng ký (có auth nhưng chưa có profile) thì chờ
         if (authUser && !profile) {
           console.log("Đang chờ khởi tạo profile...");
           return; 
@@ -65,12 +81,13 @@ export default function App() {
           return;
         }
 
-        // Đồng bộ ID với OneSignal để nhận thông báo chuẩn
-        import("react-onesignal").then((OneSignal) => {
-          OneSignal.default.login(nextUser.id);
-          // Hỏi quyền để gửi thông báo
-          OneSignal.default.showSlidedownPrompt();
-        });
+        // ✅ 3. ĐĂNG NHẬP ONESIGNAL AN TOÀN (CHỐNG LỖI 'Qe')
+        // Bắt buộc phải biến ID thành dạng Chuỗi (String) và đảm bảo OneSignal đã chạy
+        if (OneSignal.initialized && nextUser.id) {
+          OneSignal.login(String(nextUser.id)).catch(err => {
+            console.warn("Lỗi đăng nhập OneSignal (Không sao cả):", err);
+          });
+        }
 
         const room = await getMyRoom(nextUser);
         if (!mounted) return;
@@ -91,7 +108,6 @@ export default function App() {
       }
     };
 
-    // 3. XỬ LÝ AUTH STATE CHANGE & URL PARAMS
     const params = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const authError = params.get("error_description") || hashParams.get("error_description") || params.get("error") || hashParams.get("error");
