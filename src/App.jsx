@@ -39,15 +39,14 @@ return () => {
   document.removeEventListener('visibilitychange', handleVisibilityChange);
 };
     // ✅ 2. SỬA LẠI HÀM KHỞI TẠO NÀY
+    // Trong App.jsx
     const initOneSignal = async () => {
       try {
-        // Chỉ chạy nếu biến cờ ở ngoài vẫn là false
         if (!isOneSignalInitialized) {
-          isOneSignalInitialized = true; // Đánh dấu là đã chạy để chặn lần thứ 2
-
+          isOneSignalInitialized = true;
           await OneSignal.init({
             appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
-            allowLocalhostAsSecureOrigin: true,
+            allowLocalhostAsSecureOrigin: true, // Quan trọng để test localhost
             notifyButton: { enable: false },
           });
           
@@ -56,10 +55,8 @@ return () => {
           }
         }
       } catch (error) {
-        // Bỏ qua lỗi đã init nếu có lọt qua
-        if (error.message !== "SDK already initialized") {
-          console.warn("OneSignal cảnh báo:", error);
-        }
+        // ✅ THÊM DÒNG NÀY: Nếu lỗi thì bỏ qua để App chạy tiếp các lệnh sau
+        console.warn("OneSignal lỗi tên miền nhưng App vẫn chạy nhé:", error.message);
       }
     };
     
