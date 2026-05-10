@@ -1,15 +1,33 @@
+import { useState } from "react";
 import Avatar from "../../../components/Avatar";
 import { uploadAvatar } from "../../../lib/coupleService";
 import { isSupabaseConfigured } from "../../../lib/supabaseClient";
 import { GB, IS } from "../../../styles/global";
 
 export default function ProfileTab({ user, couple, streak, history, bucket, editMode, setEditMode, editName, setEditName, saveProfile, onLogout, onUpdateUser }) {
+  // Thêm state để theo dõi quá trình up ảnh
+  const [isUploading, setIsUploading] = useState(false);
+
   const handleAvatar = async (file) => {
+    if (!file) return;
+
     if (isSupabaseConfigured) {
-      const url = await uploadAvatar(user, file);
-      onUpdateUser({ ...user, avatar: url });
+      try {
+        setIsUploading(true); // Bật trạng thái đang tải
+        const url = await uploadAvatar(user, file); // Gọi hàm nén & upload đã sửa
+        if (url) {
+          onUpdateUser({ ...user, avatar: url });
+        }
+      } catch (error) {
+        // Bắn thông báo lỗi lên màn hình điện thoại nếu mạng tịt hoặc ảnh lỗi
+        alert("Lỗi tải ảnh: " + (error.message || "Vui lòng thử lại sau!"));
+      } finally {
+        setIsUploading(false); // Tắt trạng thái đang tải dù thành công hay thất bại
+      }
       return;
     }
+
+    // Chế độ không dùng Supabase (Local demo)
     const reader = new FileReader();
     reader.onload = (event) => onUpdateUser({ ...user, avatar: event.target.result });
     reader.readAsDataURL(file);
@@ -18,10 +36,15 @@ export default function ProfileTab({ user, couple, streak, history, bucket, edit
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>
       <div style={{ textAlign: "center", marginBottom: 26 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <Avatar src={user.avatar} name={user.name} size={86} editable onUpload={handleAvatar} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, opacity: isUploading ? 0.5 : 1, transition: "opacity 0.2s" }}>
+          {/* Avatar Component */}
+          <Avatar src={user.avatar} name={user.name} size={86} editable={!isUploading} onUpload={handleAvatar} />
         </div>
-        <div style={{ color: "#555", fontSize: 11, marginBottom: 10 }}>📷 Nhấn vào ảnh để đổi avatar</div>
+        
+        {/* Đổi dòng text khi đang upload để người dùng đỡ sốt ruột */}
+        <div style={{ color: isUploading ? "#ff6b9d" : "#555", fontSize: 11, marginBottom: 10, fontWeight: isUploading ? 700 : 400 }}>
+          {isUploading ? "⏳ Đang xử lý và tải ảnh lên..." : "📷 Nhấn vào ảnh để đổi avatar"}
+        </div>
 
         {!editMode ? (
           <>
@@ -45,7 +68,8 @@ export default function ProfileTab({ user, couple, streak, history, bucket, edit
       <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 16, padding: "14px 16px", marginBottom: 14 }}>
         <div style={{ color: "#555", fontSize: 11, marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Người ấy</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Avatar name={couple.partnerName} size={42} />
+          {/* Avatar partner cũng lấy url từ db nếu có */}
+          <Avatar src={couple.partnerAvatar} name={couple.partnerName} size={42} />
           <div>
             <div style={{ color: "#fff", fontWeight: 700 }}>{couple.partnerName}</div>
             <div style={{ color: "#ff6b9d", fontSize: 12, fontFamily: "monospace", letterSpacing: 2 }}>#{couple.coupleCode}</div>

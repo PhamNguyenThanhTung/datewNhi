@@ -99,17 +99,95 @@ export async function updateProfile(user, patch) {
   return profileToUser(data, { id: user.id, email: user.email });
 }
 
+// ==========================================
+// 🛠️ HÀM HỖ TRỢ: TỰ ĐỘNG NÉN ẢNH (ÉP CÂN)
+// ==========================================
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        // Đặt kích thước chiều ngang tối đa (VD: 800px là đủ nét cho Avatar)
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        // Tính toán lại tỷ lệ nếu ảnh to hơn 800px
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        // Vẽ ảnh lên một thẻ Canvas ảo để ép size
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Nén ảnh thành file JPEG với chất lượng 70% (0.7)
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Lỗi nén ảnh"));
+              return;
+            }
+            // Tạo lại file mới, đổi tên đuôi thành .jpg cho nhẹ
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          0.7
+        );
+      };
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+// ==========================================
+// ✅ HÀM UPLOAD AVATAR (CÓ TÍCH HỢP TỰ ĐỘNG NÉN)
+// ==========================================
 export async function uploadAvatar(user, file) {
   if (!isSupabaseConfigured) return null;
-  const ext = file.name.split(".").pop() || "jpg";
-  const path = `${user.id}/avatar.${ext}`;
-  const { error } = await supabase.storage.from("avatars").upload(path, file, {
-    cacheControl: "3600",
-    upsert: true,
-  });
-  if (error) throw error;
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-  return data.publicUrl;
+
+  try {
+    let fileToUpload = file;
+
+    // Nếu ảnh nặng hơn 1MB (1 * 1024 * 1024 bytes) => Tự động đem đi "ép cân"
+    if (file.size > 1024 * 1024) {
+      console.log("Ảnh gốc nặng quá, đang tiến hành ép mỡ...");
+      fileToUpload = await compressImage(file);
+      console.log("Ép xong! Size mới:", (fileToUpload.size / 1024).toFixed(2), "KB");
+    }
+
+    // Đặt tên file bằng thời gian thực để điện thoại không bị kẹt Cache ảnh cũ
+    const path = `${user.id}/avatar_${Date.now()}.jpg`; 
+
+    // Upload file (gốc hoặc đã nén) lên Supabase
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, fileToUpload, {
+      cacheControl: "0", 
+      upsert: false,
+    });
+
+    if (uploadError) {
+      console.error("Lỗi từ Supabase:", uploadError);
+      throw new Error("Mạng mẽo chán quá, thử lại nha!");
+    }
+
+    // Lấy link ảnh Public trả về
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return data.publicUrl;
+
+  } catch (err) {
+    throw err; 
+  }
 }
 
 export async function createRoom(user) {
