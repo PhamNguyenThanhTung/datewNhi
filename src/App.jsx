@@ -26,7 +26,18 @@ export default function App() {
     if (!isSupabaseConfigured) return;
 
     let mounted = true;
+    // Khi tab được focus trở lại, refresh session nếu cần
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    supabase.auth.refreshSession().catch(console.warn);
+  }
+};
 
+document.addEventListener('visibilitychange', handleVisibilityChange);
+
+return () => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+};
     // ✅ 2. SỬA LẠI HÀM KHỞI TẠO NÀY
     const initOneSignal = async () => {
       try {
