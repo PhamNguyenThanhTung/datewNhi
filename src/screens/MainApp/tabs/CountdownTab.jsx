@@ -14,7 +14,18 @@ export default function CountdownTab({ countdown, onSave }) {
   const [date, setDate] = useState(countdown.date || "");
   const left = daysLeft(countdown.date);
 
-  const save = () => onSave({ title: title.trim(), date });
+const save = async () => {
+  if (!title.trim() || !date) {
+    alert("Vui lòng nhập tên sự kiện và chọn ngày.");
+    return;
+  }
+  try {
+    await onSave({ title: title.trim(), date });
+  } catch (error) {
+    console.error("❌ Lỗi khi lưu countdown:", error);
+    alert("Không thể lưu countdown. Hãy thử lại.");
+  }
+};
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease" }}>

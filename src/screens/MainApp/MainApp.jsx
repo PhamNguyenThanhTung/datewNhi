@@ -5,7 +5,7 @@ import { getTodayKey } from "../../data/questions";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
 import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, sendPushNotification, subscribeRoom, toggleBucketItem, uploadMemory } from "../../lib/coupleService";
 import { useDailyPrompts } from "../../hooks/useDailyPrompts";
-import GamesTab from "./tabs/GamesTab"; // Đường dẫn tuỳ thuộc vào file MainApp của bạn đang ở đâu
+import GamesTab from "./tabs/GamesTab";
 import HomeTab from "./tabs/HomeTab";
 import HistoryTab from "./tabs/HistoryTab";
 import BucketTab from "./tabs/BucketTab";
@@ -31,7 +31,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const [localBucket, setLocalBucket] = useLS(`bucket_${couple.coupleCode}`, []);
 
   const [myAns, setMyAns] = useState(localMyAns);
-  const [, setPtAns] = useState(localPtAns);
+  const [ptAns, setPtAns] = useState(localPtAns); // ✅ Sửa: thêm khai báo ptAns
   const [myAnswers, setMyAnswers] = useState(localMyAnswers);
   const [partnerAnswers, setPartnerAnswers] = useState(localPtAnswers);
   const [streak, setStreak] = useState(localStreak);
@@ -54,23 +54,28 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     if (!isSupabaseConfigured) return;
     let mounted = true;
     const sync = async () => {
-      const data = await loadRoomData(roomId, user.id);
-      if (!mounted || !data) return;
-      setMyAns(data.myAns);
-      setPtAns(data.ptAns);
-      setMyAnswers(data.myAnswers);
-      setPartnerAnswers(data.partnerAnswers);
-      setHistory(data.history);
-      setBucket(data.bucket);
-      setMemories(data.memories);
-      setStreak(data.streak);
-      setCountdown(data.countdown);
-      setPartnerName(data.partnerName);
-      setPartnerJoined(data.partnerJoined);
-      setSyncing(false);
+      try {
+        const data = await loadRoomData(roomId, user.id);
+        if (!mounted || !data) return;
+        setMyAns(data.myAns);
+        setPtAns(data.ptAns);
+        setMyAnswers(data.myAnswers);
+        setPartnerAnswers(data.partnerAnswers);
+        setHistory(data.history);
+        setBucket(data.bucket);
+        setMemories(data.memories);
+        setStreak(data.streak);
+        setCountdown(data.countdown);
+        setPartnerName(data.partnerName);
+        setPartnerJoined(data.partnerJoined);
+      } catch (error) {
+        console.error("Lỗi đồng bộ:", error);
+      } finally {
+        if (mounted) setSyncing(false);
+      }
     };
-    sync().catch(console.error);
-    const unsubscribe = subscribeRoom(roomId, () => sync().catch(console.error));
+    sync();
+    const unsubscribe = subscribeRoom(roomId, () => sync());
     return () => {
       mounted = false;
       unsubscribe();
@@ -108,44 +113,49 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const submitMy = async (question) => {
     const answer = ansInputs[question.promptKey]?.trim();
     if (!answer) return;
-    setMyAnswers((items) => {
-      const next = { ...items, [question.promptKey]: answer };
+    setMyAnswers((prev) => {
+      const next = { ...prev, [question.promptKey]: answer };
       setLocalMyAnswers(next);
       return next;
     });
     setMyAns(answer);
     setLocalMyAns(answer);
     setAnsInputs((items) => ({ ...items, [question.promptKey]: "" }));
-    await saveAnswer({ roomId, userId: user.id, question, answer });
-    
-    // Check streak: I just answered, check if partner has answered too
-    const partnerResponded = ptAns || Object.keys(partnerAnswers).length > 0;
-    if (partnerResponded && streak.lastDate !== todayKey) {
-      attemptStreakUpdate();
+    try {
+      await saveAnswer({ roomId, userId: user.id, question, answer });
+      const partnerResponded = ptAns || Object.keys(partnerAnswers).length > 0;
+      if (partnerResponded && streak.lastDate !== todayKey) {
+        attemptStreakUpdate();
+      }
+    } catch (err) {
+      console.error("Lỗi lưu câu trả lời:", err);
     }
   };
 
   const uploadQuestionPhoto = async (question, file) => {
     const caption = question.vi;
-    if (isSupabaseConfigured) {
-      const memory = await uploadMemory(roomId, user.id, file, caption);
-      setMemories((items) => [memory, ...items]);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setMemories((items) => [{ id: Date.now(), image_url: event.target.result, caption, created_at: new Date().toISOString() }, ...items]);
-      };
-      reader.readAsDataURL(file);
+    try {
+      if (isSupabaseConfigured) {
+        const memory = await uploadMemory(roomId, user.id, file, caption);
+        setMemories((items) => [memory, ...items]);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setMemories((items) => [{ id: Date.now(), image_url: event.target.result, caption, created_at: new Date().toISOString() }, ...items]);
+        };
+        reader.readAsDataURL(file);
+      }
+      const answer = "Đã gửi một bức ảnh 📷";
+      setMyAnswers((prev) => {
+        const next = { ...prev, [question.promptKey]: answer };
+        setLocalMyAnswers(next);
+        return next;
+      });
+      const partnerId = couple.partnerId || (couple.user1_id === user.id ? couple.user2_id : couple.user1_id);
+      await saveAnswer({ roomId, userId: user.id, userName: user.name, partnerId, question, answer });
+    } catch (err) {
+      console.error("Lỗi upload ảnh:", err);
     }
-    const answer = "Đã gửi một bức ảnh 📷";
-    setMyAnswers((items) => {
-      const next = { ...items, [question.promptKey]: answer };
-      setLocalMyAnswers(next);
-      return next;
-    });
-    // Gửi thông báo cho người kia
-    const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
-    await saveAnswer({ roomId, userId: user.id, userName: user.name, partnerId, question, answer });
   };
 
   const submitPt = async () => {
@@ -155,8 +165,6 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     setLocalPtAns(answer);
     setPtInput("");
     setShowSim(false);
-    
-    // Check streak: Partner just answered, check if I have answered too
     const iResponded = myAns || Object.keys(myAnswers).length > 0;
     if (iResponded && streak.lastDate !== todayKey) {
       attemptStreakUpdate();
@@ -167,84 +175,96 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     if (!newItem.trim()) return;
     const text = newItem.trim();
     setNewItem("");
-    if (isSupabaseConfigured) {
-      const inserted = await saveBucketItem(roomId, text);
-      if (inserted) setBucket((b) => [inserted, ...b]);
-      attemptStreakUpdate(); // Streak cộng khi add bucket item
-      // Gửi thông báo cho người kia
-      const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
-      if (partnerId) {
-        console.log(`🎯 [BUCKET] Thêm item: "${text}" → Gửi notification cho ${partnerId}`);
-        sendPushNotification(partnerId, `${user.name} vừa thêm vào danh sách: "${text}" ✨`);
+    try {
+      if (isSupabaseConfigured) {
+        const inserted = await saveBucketItem(roomId, text);
+        if (inserted) setBucket((prev) => [inserted, ...prev]);
+        attemptStreakUpdate();
+        const partnerId = couple.partnerId || (couple.user1_id === user.id ? couple.user2_id : couple.user1_id);
+        if (partnerId) {
+          sendPushNotification(partnerId, `${user.name} vừa thêm vào danh sách: "${text}" ✨`);
+        }
       } else {
-        console.warn(`⚠️ [BUCKET] Không có partnerId, bỏ qua notification`);
+        const item = { id: Date.now(), text, done: false };
+        setBucket((prev) => {
+          const next = [item, ...prev];
+          setLocalBucket(next);
+          return next;
+        });
+        attemptStreakUpdate();
       }
-      return;
+    } catch (err) {
+      console.error("Lỗi thêm bucket:", err);
     }
-    const item = { id: Date.now(), text, done: false };
-    setBucket((b) => {
-      const next = [item, ...b];
-      setLocalBucket(next);
-      return next;
-    });
-    attemptStreakUpdate(); // Streak cộng khi add bucket item
   };
 
   const addSuggestion = async (text, index) => {
-    if (isSupabaseConfigured) {
-      const inserted = await saveBucketItem(roomId, text);
-      if (inserted) setBucket((b) => [inserted, ...b]);
-      attemptStreakUpdate(); // Streak cộng khi accept suggestion
-      // Gửi thông báo cho người kia
-      const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
-      if (partnerId) {
-        console.log(`🎯 [SUGGESTION] Chấp nhận gợi ý: "${text}" → Gửi notification cho ${partnerId}`);
-        sendPushNotification(partnerId, `${user.name} vừa chấp nhận gợi ý: "${text}" ✨`);
+    setNewItem("");
+    try {
+      if (isSupabaseConfigured) {
+        const inserted = await saveBucketItem(roomId, text);
+        if (inserted) setBucket((prev) => [inserted, ...prev]);
+        attemptStreakUpdate();
+        const partnerId = couple.partnerId || (couple.user1_id === user.id ? couple.user2_id : couple.user1_id);
+        if (partnerId) {
+          sendPushNotification(partnerId, `${user.name} vừa chấp nhận gợi ý: "${text}" ✨`);
+        }
       } else {
-        console.warn(`⚠️ [SUGGESTION] Không có partnerId, bỏ qua notification`);
+        const item = { id: Date.now() + index, text, done: false };
+        setBucket((prev) => {
+          const next = [item, ...prev];
+          setLocalBucket(next);
+          return next;
+        });
+        attemptStreakUpdate();
       }
-      return;
+    } catch (err) {
+      console.error("Lỗi thêm gợi ý:", err);
     }
-    setBucket((b) => {
-      const next = [{ id: Date.now() + index, text, done: false }, ...b];
-      setLocalBucket(next);
-      return next;
-    });
-    attemptStreakUpdate(); // Streak cộng khi accept suggestion
   };
 
   const toggleItem = async (id) => {
     const item = bucket.find((x) => x.id === id);
     if (!item) return;
     const done = !item.done;
-    setBucket((b) => {
-      const next = b.map((x) => (x.id === id ? { ...x, done } : x));
-      setLocalBucket(next);
-      return next;
-    });
-    await toggleBucketItem(id, done);
+    try {
+      await toggleBucketItem(id, done);
+      setBucket((prev) => {
+        const next = prev.map((x) => (x.id === id ? { ...x, done } : x));
+        setLocalBucket(next);
+        return next;
+      });
+    } catch (err) {
+      console.error("Lỗi toggle bucket:", err);
+    }
   };
 
   const removeItem = async (id) => {
-    setBucket((b) => {
-      const next = b.filter((x) => x.id !== id);
-      setLocalBucket(next);
-      return next;
-    });
-    await deleteBucketItem(id);
+    try {
+      await deleteBucketItem(id);
+      setBucket((prev) => {
+        const next = prev.filter((x) => x.id !== id);
+        setLocalBucket(next);
+        return next;
+      });
+    } catch (err) {
+      console.error("Lỗi xóa bucket:", err);
+    }
   };
 
   const handleSaveCountdown = async (nextCountdown) => {
-    setCountdown(nextCountdown);
-    await saveCountdown(roomId, nextCountdown);
-    attemptStreakUpdate(); // Streak cộng khi save countdown
-    // Gửi thông báo cho người kia
-    const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
-    if (partnerId && nextCountdown.title) {
-      console.log(`🎯 [COUNTDOWN] Cập nhật: "${nextCountdown.title}" → Gửi notification cho ${partnerId}`);
-      sendPushNotification(partnerId, `${user.name} vừa cập nhật: "${nextCountdown.title}" ⏰`);
-    } else {
-      console.warn(`⚠️ [COUNTDOWN] Không đủ điều kiện gửi (partnerId=${partnerId}, title=${nextCountdown.title})`);
+    try {
+      await saveCountdown(roomId, nextCountdown);
+      setCountdown(nextCountdown);
+      // ✅ Cập nhật couple để widget nhận biết
+      
+      attemptStreakUpdate();
+      const partnerId = couple.partnerId || (couple.user1_id === user.id ? couple.user2_id : couple.user1_id);
+      if (partnerId && nextCountdown.title) {
+        sendPushNotification(partnerId, `${user.name} vừa cập nhật: "${nextCountdown.title}" ⏰`);
+      }
+    } catch (err) {
+      console.error("Lỗi lưu countdown:", err);
     }
   };
 
@@ -254,17 +274,7 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   };
 
   const displayCouple = { ...couple, partnerName, partnerJoined };
-  const tabs = [
-    { id: "home", icon: "🕯️", label: "Hôm nay" },
-    { id: "history", icon: "📖", label: "Lịch sử" },
-    { id: "games", icon: "🎮", label: "Góc Vui" },
-    { id: "album", icon: "🖼️", label: "Album" },
-    { id: "countdown", icon: "⏰", label: "Đếm ngày" },
-    { id: "bucket", icon: "🌟", label: "Danh sách" },
-    { id: "profile", icon: "👤", label: "Hồ sơ" },
-  ];
 
-  // 🕯️ Màn hình Loading khi đợi câu hỏi từ server
   if (promptsLoading) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0a12", color: "#ff6b9d" }}>
@@ -304,23 +314,36 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
         )}
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
-        {tab === 'games' && (
+        {tab === "games" && (
           <GamesTab
-  roomId={couple.roomId}          // thay room.id → couple.roomId
-  userId={user.id}
-  myName={user.name}
-  partnerName={couple.partnerName}
-  partnerId={couple.partnerId}    // đã có sẵn từ bản sửa trước
-/>
+            roomId={couple.roomId}
+            userId={user.id}
+            myName={user.name}
+            partnerName={couple.partnerName}
+            partnerId={couple.partnerId || null}
+          />
         )}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
-        {tab === "countdown" && <CountdownTab countdown={countdown} onSave={handleSaveCountdown} />}
+        {tab === "countdown" && (
+          <CountdownTab
+            countdown={{ title: couple.countdownTitle || countdown.title, date: couple.countdownDate || countdown.date }}
+            onSave={handleSaveCountdown}
+          />
+        )}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}
         {tab === "profile" && <ProfileTab user={user} couple={displayCouple} streak={streak} history={history} bucket={bucket} editMode={editMode} setEditMode={setEditMode} editName={editName} setEditName={setEditName} saveProfile={saveProfile} onLogout={onLogout} onUpdateUser={onUpdateUser} />}
       </div>
 
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: "rgba(7,7,14,0.97)", backdropFilter: "blur(28px)", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-around", padding: "10px 0 max(10px,env(safe-area-inset-bottom))", zIndex: 20 }}>
-        {tabs.map((t) => (
+        {[
+          { id: "home", icon: "🕯️", label: "Hôm nay" },
+          { id: "history", icon: "📖", label: "Lịch sử" },
+          { id: "games", icon: "🎮", label: "Góc Vui" },
+          { id: "album", icon: "🖼️", label: "Album" },
+          { id: "countdown", icon: "⏰", label: "Đếm ngày" },
+          { id: "bucket", icon: "🌟", label: "Danh sách" },
+          { id: "profile", icon: "👤", label: "Hồ sơ" },
+        ].map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "4px 6px", fontFamily: "inherit", minWidth: 48 }}>
             <span style={{ fontSize: 19, filter: tab === t.id ? "none" : "grayscale(0.7)", opacity: tab === t.id ? 1 : 0.32, transition: "all 0.2s" }}>{t.icon}</span>
             <span style={{ fontSize: 9, fontWeight: 700, color: tab === t.id ? "#ff6b9d" : "#444", transition: "color 0.2s", whiteSpace: "nowrap" }}>{t.label}</span>
