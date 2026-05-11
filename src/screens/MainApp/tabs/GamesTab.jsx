@@ -142,7 +142,15 @@ const handleInvite = () => {
         <div style={s.featureContent}>
           {activeFeature === 'draw_together' && <DrawTogether roomId={roomId} userId={userId} partnerName={partnerName} />}
           {activeFeature === 'draw_guess' && <DrawAndGuess roomId={roomId} userId={userId} partnerName={partnerName} />}
-          {activeFeature === 'love_note' && <LoveNote roomId={roomId} userId={userId} myName={myName} partnerName={partnerName} />}
+          {activeFeature === 'love_note' && (
+  <LoveNote 
+    roomId={roomId} 
+    userId={userId} 
+    myName={myName} 
+    partnerName={partnerName} 
+    partnerId={partnerId}   // ✅ thêm dòng này
+  />
+)}
           {activeFeature === 'thumb_kiss' && <ThumbKiss roomId={roomId} userId={userId} partnerName={partnerName} />}
           
           {/* TRUYỀN partnerId VÀ myName XUỐNG POKES */}

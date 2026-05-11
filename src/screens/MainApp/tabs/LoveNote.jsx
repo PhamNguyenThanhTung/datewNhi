@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
+import { sendPushNotification } from '../../../lib/coupleService';
 
 const MAX_CHARS = 200;
 
@@ -138,7 +139,7 @@ const s = {
   },
 };
 
-export default function LoveNote({ roomId, userId, myName, partnerName }) {
+export default function LoveNote({ roomId, userId, myName, partnerName, partnerId }) {
   const [myText, setMyText] = useState('');
   const [partnerText, setPartnerText] = useState('');
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
@@ -193,18 +194,34 @@ export default function LoveNote({ roomId, userId, myName, partnerName }) {
 
   const handleSend = async () => {
     if (!myText.trim()) return;
+
     channelRef.current?.send({
       type: 'broadcast',
       event: 'send_note',
       payload: { userId, text: myText },
     });
-    // Lưu vào DB
-    await supabase.from('answers').insert({
+
+    // Lưu vào DB – bỏ .maybeSingle()
+    const { error: insertError } = await supabase.from('answers').insert({
       room_id: roomId,
       user_id: userId,
-      question_id: 'love_note',
-      answer_text: `💌 ${myText}`,
-    }).maybeSingle();
+      date_key: `love_${Date.now()}`,
+      question_vi: '💌 Love Note',
+      question_en: 'Love Note',
+      answer_text: myText,
+    });
+    if (insertError) {
+      console.error('❌ Lưu Love Note thất bại:', insertError.message);
+    }
+
+    // Gửi push notification cho partner
+    if (partnerId) {
+      sendPushNotification(
+        partnerId,
+        `${myName} vừa gửi một Love Note: “${myText.slice(0, 80)}${myText.length > 80 ? '…' : ''}”`
+      );
+    }
+
     setMyText('');
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2500);
