@@ -3,7 +3,7 @@ import Avatar from "../../components/Avatar";
 import useLS from "../../hooks/useLS";
 import { getTodayKey } from "../../data/questions";
 import { isSupabaseConfigured } from "../../lib/supabaseClient";
-import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, sendPushNotification, subscribeRoom, toggleBucketItem, uploadMemory } from "../../lib/coupleService";
+import { deleteBucketItem, loadRoomData, saveAnswer, saveBucketItem, saveCountdown, sendPushNotification, subscribeRoom, toggleBucketItem, uploadMemory, deleteMemory  } from "../../lib/coupleService";
 import { useDailyPrompts } from "../../hooks/useDailyPrompts";
 import GamesTab from "./tabs/GamesTab";
 import HomeTab from "./tabs/HomeTab";
@@ -251,7 +251,18 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       console.error("Lỗi xóa bucket:", err);
     }
   };
-
+const handleDeleteMemory = async (memory) => {
+  console.log("handleDeleteMemory gọi với memory:", memory); // ✅ thêm dòng log này
+  if (!confirm("Xóa ảnh này?")) return;
+  try {
+    await deleteMemory(memory.id, memory.image_path);
+    setMemories((prev) => prev.filter((m) => m.id !== memory.id));
+    console.log("Xóa thành công"); // ✅ log thành công
+  } catch (err) {
+    console.error("Lỗi xóa ảnh:", err);
+    alert("Không thể xóa ảnh, thử lại sau.");
+  }
+};
   const handleSaveCountdown = async (nextCountdown) => {
     try {
       await saveCountdown(roomId, nextCountdown);
@@ -323,13 +334,15 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
             partnerId={couple.partnerId || null}
           />
         )}
-        {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
-        {tab === "countdown" && (
-          <CountdownTab
-            countdown={{ title: couple.countdownTitle || countdown.title, date: couple.countdownDate || countdown.date }}
-            onSave={handleSaveCountdown}
-          />
-        )}
+        {tab === "album" && (
+  <AlbumTab
+    user={user}
+    roomId={roomId}
+    memories={memories}
+    setMemories={setMemories}
+    onDeleteMemory={handleDeleteMemory}   // ✅ dòng mới
+  />
+)}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}
         {tab === "profile" && <ProfileTab user={user} couple={displayCouple} streak={streak} history={history} bucket={bucket} editMode={editMode} setEditMode={setEditMode} editName={editName} setEditName={setEditName} saveProfile={saveProfile} onLogout={onLogout} onUpdateUser={onUpdateUser} />}
       </div>

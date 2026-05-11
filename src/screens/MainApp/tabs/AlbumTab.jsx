@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
-import { uploadMemory, deleteBucketItem } from "../../../lib/coupleService";
+import { uploadMemory, deleteMemory } from "../../../lib/coupleService";
 import { isSupabaseConfigured } from "../../../lib/supabaseClient";
 import { BS, IS } from "../../../styles/global";
 
-export default function AlbumTab({ user, roomId, memories, setMemories }) {
+export default function AlbumTab({ user, roomId, memories, setMemories, onDeleteMemory }) {
   const inputRef = useRef(null);
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -89,14 +89,16 @@ export default function AlbumTab({ user, roomId, memories, setMemories }) {
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedMemory) return;
-    setMemories((items) => items.filter((m) => m.id !== selectedMemory.id));
-    await deleteBucketItem(selectedMemory.id);
-    setSelectedMemory(null);
-    setShowMenu(false);
-  };
-
+const handleDelete = async () => {
+  if (!selectedMemory) return;
+  if (onDeleteMemory) {
+    await onDeleteMemory(selectedMemory);
+  } else {
+    console.warn("onDeleteMemory chưa được cung cấp, không thể xóa");
+  }
+  setSelectedMemory(null);
+  setShowMenu(false);
+};
   const handleSave = async () => {
     if (!selectedMemory) return;
     const a = document.createElement("a");
@@ -122,23 +124,28 @@ export default function AlbumTab({ user, roomId, memories, setMemories }) {
       <div style={{ display: "grid", gridTemplateColumns: memories.length ? "1fr 1fr" : "1fr", gap: 10, marginTop: 14 }}>
         {memories.length === 0 ? (
           <div style={{ textAlign: "center", color: "#444", marginTop: 44 }}><div style={{ fontSize: 42 }}>📷</div><p style={{ fontSize: 14 }}>Chưa có ảnh nào.</p></div>
-        // 🟢 Thay thế từ dòng 125 trở đi bằng đoạn này:
-          ) : memories.map((memory) => (
-            <div
-              key={memory.id}
-              onClick={() => handleImagePress(memory)}
-              onMouseDown={() => handleMouseDown(memory)}
-              onMouseUp={handleMouseUp}
-              // ✅ Đây là chỗ gộp 2 cái onMouseLeave cũ thành 1 hàm duy nhất:
-              onMouseLeave={(e) => {
-                handleMouseUp(); 
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-              onTouchStart={() => handleTouchStart(memory)}
-              onTouchEnd={handleTouchEnd}
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, overflow: "hidden", cursor: "pointer", transition: "transform 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
-            >
+        ) : memories.map((memory) => (
+          <div
+            key={memory.id}
+            onClick={() => handleImagePress(memory)}
+            onMouseDown={() => handleMouseDown(memory)}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={(e) => {
+              handleMouseUp();
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+            onTouchStart={() => handleTouchStart(memory)}
+            onTouchEnd={handleTouchEnd}
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 14,
+              overflow: "hidden",
+              cursor: "pointer",
+              transition: "transform 0.2s"
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
+          >
             <img src={memory.image_url} alt={memory.caption || "Kỷ niệm"} style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", display: "block" }} />
             {memory.caption && <div style={{ color: "#ccc", fontSize: 12, lineHeight: 1.4, padding: "8px 10px", background: "rgba(0,0,0,0.3)" }}>{memory.caption}</div>}
           </div>

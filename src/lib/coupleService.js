@@ -440,3 +440,14 @@ export async function sendPushNotification(targetUserId, message) {
 
   console.log("✅ [NOTIFICATION] Kết quả từ OneSignal:", data);
 }
+export async function deleteMemory(memoryId, imagePath) {
+  if (!isSupabaseConfigured) return;
+  
+  // Xóa file khỏi storage
+  const { error: storageError } = await supabase.storage.from("memories").remove([imagePath]);
+  if (storageError) throw storageError;
+  
+  // Xóa record trong database
+  const { error: dbError } = await supabase.from("memories").delete().eq("id", memoryId);
+  if (dbError) throw dbError;
+}
