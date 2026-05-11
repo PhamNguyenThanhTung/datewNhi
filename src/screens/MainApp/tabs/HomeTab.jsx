@@ -90,6 +90,8 @@ export default function HomeTab({ user, couple, questions, myAnswers, partnerAns
 
     // Lấy ID của người kia để OneSignal biết đường gửi
     const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
+    
+    console.log(`💬 [HOME] Gửi câu trả lời - partnerId=${partnerId}, questionKey=${question.promptKey}`);
 
     try {
       await saveAnswer({
@@ -101,12 +103,14 @@ export default function HomeTab({ user, couple, questions, myAnswers, partnerAns
         answer: text
       });
       
+      console.log(`✅ [HOME] Gửi thành công!`);
+      
       // Tự động trượt sang câu tiếp theo sau khi gửi thành công
       if (activeIndex < visibleQuestions.length - 1) {
         setTimeout(() => scrollTo(activeIndex + 1), 500);
       }
     } catch (err) {
-      console.error("Lỗi gửi bài:", err);
+      console.error("❌ [HOME] Lỗi gửi bài:", err);
     }
   };
 

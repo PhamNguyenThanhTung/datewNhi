@@ -231,27 +231,28 @@ export async function getMyRoom(user) {
 
 async function roomToCouple(room, user) {
   if (!isSupabaseConfigured) return room;
+
   const partnerId = room.user1_id === user.id ? room.user2_id : room.user1_id;
   let partnerProfile = null;
   if (partnerId) {
-    // ✅ FIX: Chỗ này là select("*") rồi nên nó lấy đủ dob của Partner luôn.
     const { data } = await supabase.from("profiles").select("*").eq("id", partnerId).maybeSingle();
     partnerProfile = data;
   }
+
   return {
     id: room.id,
     roomId: room.id,
     coupleCode: room.invite_code,
     partnerName: partnerProfile?.display_name || "Đang chờ người ấy",
     partnerAvatar: partnerProfile?.avatar_url || null,
-    // ✅ FIX: Đưa ngày sinh của partner vào để hiển thị cung hoàng đạo
-    partnerDob: partnerProfile?.dob || null, 
+    partnerDob: partnerProfile?.dob || null,
     partnerJoined: Boolean(partnerProfile),
+    // 👇 THÊM DÒNG NÀY
+    partnerId: partnerId || null,   // <-- Quan trọng
     myName: user.name,
     role: room.user1_id === user.id ? "A" : "B",
     streakCount: room.streak_count || 0,
     lastDate: room.last_answer_date,
-    // ✅ FIX: Đưa ngày yêu nhau vào object couple
     startDate: room.start_date || null,
     countdownTitle: room.countdown_title || "",
     countdownDate: room.countdown_date || "",
@@ -308,6 +309,8 @@ export async function saveAnswer({ roomId, userId, userName, partnerId, question
   if (!isSupabaseConfigured) return;
   const dateKey = question.promptKey || getTodayKey();
   
+  console.log(`💬 [ANSWER] Lưu câu trả lời:`, { userId, userName, dateKey, questionKey: question.promptKey });
+  
   const { error } = await supabase.from("answers").upsert(
     {
       room_id: roomId,
@@ -322,13 +325,17 @@ export async function saveAnswer({ roomId, userId, userName, partnerId, question
 
   if (error) throw error;
   
+  console.log(`📝 [ANSWER] ✅ Lưu thành công vào DB`);
+  
   // 1. Cập nhật Streak
   await refreshStreak(roomId);
 
   // 2. 🔔 BẮN THÔNG BÁO CHO NGƯỜI KIA
-  // Nếu có ID người kia, gửi tin nhắn báo hiệu
   if (partnerId) {
+    console.log(`📬 [ANSWER] Gửi thông báo cho partner: ${partnerId}`);
     sendPushNotification(partnerId, `${userName} vừa trả lời câu hỏi: "${question.vi}" ✨`);
+  } else {
+    console.warn(`⚠️ [ANSWER] Không có partnerId, bỏ qua gửi thông báo`);
   }
 }
 
@@ -413,40 +420,23 @@ export function subscribeRoom(roomId, onChange) {
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
-// ✅ HÀM GỬI THÔNG BÁO QUA ONESIGNAL (ĐÃ FIX)
+// ✅ HÀM GỬI THÔNG BÁO QUA ONESIGNAL (ĐÃ FIX + DEBUG CHI TIẾT)
 export async function sendPushNotification(targetUserId, message) {
-  if (!targetUserId) return;
-
-  const options = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // Đảm bảo chữ Basic có dấu cách phía sau
-      'Authorization': 'Basic os_v2_app_oybov2ddwbh6lexelqj7howel6qlxz73qosux3u5borxecp4yt3brapgz55h6kw6xmmgwukww2otwl6msbza2zs5pjwtkpfcww662za' 
-    },
-    body: JSON.stringify({
-      app_id: '7602eae8-63b0-4fe5-92e4-5c13f3bac45f',
-      include_external_user_ids: [targetUserId],
-      contents: { en: message, vi: message },
-      headings: { en: 'Lửa Nhỏ 🔥', vi: 'Lửa Nhỏ 🔥' },
-      
-      // ✅ PHẢI LÀ LINK WEB, KHÔNG ĐƯỢC DÙNG Ổ C:
-      chrome_web_icon: "https://datew-nhi.vercel.app/logo.jpg", 
-      // Nếu chưa có link web, tạm thời hãy comment dòng icon này lại hoặc dùng link ảnh mạng
-      // chrome_web_icon: "https://i.imgur.com/your-image-id.jpg" 
-    })
-  };
-
-  try {
-    const res = await fetch('https://onesignal.com/api/v1/notifications', options);
-    const data = await res.json();
-    
-    if (data.errors) {
-      console.error("OneSignal báo lỗi:", data.errors);
-    } else {
-      console.log("Gửi thông báo thành công:", data);
-    }
-  } catch (err) {
-    console.error("Lỗi kết nối mạng:", err);
+  if (!targetUserId) {
+    console.warn("❌ sendPushNotification: targetUserId rỗng, bỏ qua gửi");
+    return;
   }
+
+  console.log(`📤 [NOTIFICATION] Gửi thông báo qua Edge Function đến user: ${targetUserId}`);
+
+  const { data, error } = await supabase.functions.invoke("send-push-notification", {
+    body: { targetUserId, message },
+  });
+
+  if (error) {
+    console.error("❌ [NOTIFICATION] Lỗi gọi Edge Function:", error);
+    return;
+  }
+
+  console.log("✅ [NOTIFICATION] Kết quả từ OneSignal:", data);
 }

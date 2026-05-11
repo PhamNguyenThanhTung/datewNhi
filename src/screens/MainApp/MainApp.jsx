@@ -174,7 +174,10 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       // Gửi thông báo cho người kia
       const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
       if (partnerId) {
+        console.log(`🎯 [BUCKET] Thêm item: "${text}" → Gửi notification cho ${partnerId}`);
         sendPushNotification(partnerId, `${user.name} vừa thêm vào danh sách: "${text}" ✨`);
+      } else {
+        console.warn(`⚠️ [BUCKET] Không có partnerId, bỏ qua notification`);
       }
       return;
     }
@@ -195,7 +198,10 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
       // Gửi thông báo cho người kia
       const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
       if (partnerId) {
+        console.log(`🎯 [SUGGESTION] Chấp nhận gợi ý: "${text}" → Gửi notification cho ${partnerId}`);
         sendPushNotification(partnerId, `${user.name} vừa chấp nhận gợi ý: "${text}" ✨`);
+      } else {
+        console.warn(`⚠️ [SUGGESTION] Không có partnerId, bỏ qua notification`);
       }
       return;
     }
@@ -235,7 +241,10 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
     // Gửi thông báo cho người kia
     const partnerId = couple.user1_id === user.id ? couple.user2_id : couple.user1_id;
     if (partnerId && nextCountdown.title) {
+      console.log(`🎯 [COUNTDOWN] Cập nhật: "${nextCountdown.title}" → Gửi notification cho ${partnerId}`);
       sendPushNotification(partnerId, `${user.name} vừa cập nhật: "${nextCountdown.title}" ⏰`);
+    } else {
+      console.warn(`⚠️ [COUNTDOWN] Không đủ điều kiện gửi (partnerId=${partnerId}, title=${nextCountdown.title})`);
     }
   };
 
@@ -296,15 +305,14 @@ export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
         {tab === 'games' && (
-  <GamesTab 
-    roomId={couple.id} 
-    userId={user.id} 
-    myName={user.name} 
-    partnerName={couple.partnerName} 
-    // 👇 BẮT BUỘC PHẢI THÊM DÒNG NÀY ĐỂ LẤY ID NGƯỜI ẤY
-    partnerId={couple.user1_id === user.id ? couple.user2_id : couple.user1_id}
-  />
-)}
+          <GamesTab
+  roomId={couple.roomId}          // thay room.id → couple.roomId
+  userId={user.id}
+  myName={user.name}
+  partnerName={couple.partnerName}
+  partnerId={couple.partnerId}    // đã có sẵn từ bản sửa trước
+/>
+        )}
         {tab === "album" && <AlbumTab user={user} roomId={roomId} memories={memories} setMemories={setMemories} />}
         {tab === "countdown" && <CountdownTab countdown={countdown} onSave={handleSaveCountdown} />}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}

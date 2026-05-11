@@ -117,19 +117,18 @@ const s = {
   inviteBtn: { background: 'linear-gradient(135deg, #ff6b9d, #a78bfa)', border: 'none', borderRadius: 99, padding: '8px 16px', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', marginTop: 12, boxShadow: '0 4px 12px rgba(255,107,157,0.3)' }
 };
 
-export default function GamesTab({ roomId, userId, myName, partnerName, partnerId }) {
+export default function GamesTab({ roomId, userId, myName, partnerName, partnerId, partnerJoined }) {
   const [activeFeature, setActiveFeature] = useState(null);
   const activeF = FEATURES.find(f => f.id === activeFeature);
 
-  // ✅ Hàm gọi Nhi vào chơi
-  const handleInvite = () => {
-    if (partnerId) {
-      sendPushNotification(partnerId, `${myName} đang đợi ${partnerName} ở Góc Vui nè! Vào chơi thôi! 🎮✨`);
-      alert(`Đã rung chuông gọi ${partnerName} thành công!`);
-    } else {
-      alert(`Người ấy (${partnerName}) chưa tham gia phòng nên không thể gọi được đâu Tùng ơi!`);
-    }
-  };
+const handleInvite = () => {
+  if (partnerId) {
+    sendPushNotification(partnerId, `${myName} đang đợi ${partnerName} ở Góc Vui nè! Vào chơi thôi! 🎮✨`);
+    alert(`Đã rung chuông gọi ${partnerName} thành công!`);
+  } else {
+    alert(`Người ấy (${partnerName}) chưa tham gia phòng nên không thể gọi được đâu!`);
+  }
+};
 
   // ✅ Hiển thị Game với CSS chuẩn của Tùng
   if (activeFeature) {

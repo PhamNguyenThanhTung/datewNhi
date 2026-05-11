@@ -187,8 +187,8 @@ APP_URL=https://datewnhi.vercel.app
 
 ### 📋 OneSignal Setup
 ```
-App ID: 7602eae8-63b0-4fe5-92e4-5c13f3bac45f
-REST API Key: os_v2_app_oybov2ddwbh6lexelqj7howel6qlxz73qosux3u5borxecp4yt3brapgz55h6kw6xmmgwukww2otwl6msbza2zs5pjwtkpfcww662za
+7602eae8-63b0-4fe5-92e4-5c13f3bac45fApp ID: 
+REST API Key: os_v2_app_oybov2ddwbh6lexelqj7howel6dbpkytj6ievp44iqcvlzte6hfv6qsa4ygpmky33yho7qwfzw7mdoo5ujpyjsg3somshbr2erluira
 ```
 
 ## 9. API/Services

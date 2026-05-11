@@ -8,10 +8,11 @@ import CodeShare from "./screens/CodeShare";
 import MainApp from "./screens/MainApp/MainApp";
 import { getMyRoom, getSessionProfile, profileToUser, signOut, updateProfile } from "./lib/coupleService";
 import { isSupabaseConfigured, supabase } from "./lib/supabaseClient";
-import OneSignal from 'react-onesignal'; 
+import OneSignal from 'react-onesignal';
 
-// ✅ 1. THÊM BIẾN NÀY NẰM BÊN NGOÀI COMPONENT APP
-let isOneSignalInitialized = false; 
+// ✅ Biến ngoài component để giữ trạng thái OneSignal
+let isOneSignalInitialized = false;
+let oneSignalReady = false; // Đánh dấu SDK đã sẵn sàng để login
 
 export default function App() {
   const [localUser, setLocalUser] = useLS("lhn_user", null);
@@ -22,134 +23,155 @@ export default function App() {
   const [booting, setBooting] = useState(isSupabaseConfigured);
   const [bootError, setBootError] = useState("");
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
 
-    let mounted = true;
-    // Khi tab được focus trở lại, refresh session nếu cần
-const handleVisibilityChange = () => {
-  if (document.visibilityState === 'visible') {
-    supabase.auth.refreshSession().catch(console.warn);
-  }
-};
+// Trong useEffect (giữ nguyên phần đầu)
+useEffect(() => {
+  if (!isSupabaseConfigured) return;
+  let mounted = true;
 
-document.addEventListener('visibilitychange', handleVisibilityChange);
+  // Visibility change – refresh nhẹ, tránh spam
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && isSupabaseConfigured) {
+      supabase.auth.refreshSession().catch(() => {});
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
-return () => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange);
-};
-    // ✅ 2. SỬA LẠI HÀM KHỞI TẠO NÀY
-    const initOneSignal = async () => {
-      try {
-        // Chỉ chạy nếu biến cờ ở ngoài vẫn là false
-        if (!isOneSignalInitialized) {
-          isOneSignalInitialized = true; // Đánh dấu là đã chạy để chặn lần thứ 2
-
-          await OneSignal.init({
-            appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
-            allowLocalhostAsSecureOrigin: true,
-            notifyButton: { enable: false },
-          });
-          
-          if (OneSignal.Slidedown) {
-            OneSignal.Slidedown.promptPush();
-          }
-        }
-      } catch (error) {
-        // Bỏ qua lỗi đã init nếu có lọt qua
-        if (error.message !== "SDK already initialized") {
-          console.warn("OneSignal cảnh báo:", error);
-        }
+  // OneSignal init
+  const initOneSignal = async () => {
+    try {
+      await OneSignal.init({
+        appId: "7602eae8-63b0-4fe5-92e4-5c13f3bac45f",
+        allowLocalhostAsSecureOrigin: true,
+        notifyButton: { enable: false },
+      });
+      // Chờ cho đến khi OneSignal.initialized === true (tối đa 30s)
+      for (let i = 0; i < 15; i++) {
+        if (OneSignal.initialized) break;
+        await new Promise(r => setTimeout(r, 1000));
       }
-    };
-    
-    initOneSignal();
+      if (OneSignal.initialized) {
+        console.log("✅ OneSignal đã sẵn sàng");
+        oneSignalReady = true;
+        if (OneSignal.Slidedown) OneSignal.Slidedown.promptPush();
+      } else {
+        console.warn("⚠️ OneSignal không sẵn sàng sau 15s");
+        oneSignalReady = true; // vẫn set để không treo
+      }
+    } catch (e) {
+      if (!e.message?.includes("SDK already initialized")) {
+        console.warn("🚨 OneSignal:", e);
+      }
+      oneSignalReady = true; // vẫn cho phép tiếp tục
+    }
+  };
+  initOneSignal();
 
-    const timeout = window.setTimeout(() => {
+  // Hàm login OneSignal nhẹ nhàng
+  const loginToOneSignal = async (userId) => {
+    // Chờ oneSignalReady (tối đa 10s)
+    for (let i = 0; i < 20; i++) {
+      if (oneSignalReady || !mounted) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!oneSignalReady || !mounted) return;
+    try {
+      if (OneSignal.initialized) {
+        await OneSignal.login(String(userId));
+        console.log("✅ Đăng nhập OneSignal thành công");
+      }
+    } catch (err) {
+      console.warn("⚠️ Lỗi đăng nhập OneSignal:", err.message);
+    }
+  };
+
+  // Timeout nếu khởi động quá lâu
+  const timeout = window.setTimeout(() => {
+    if (!mounted) return;
+    setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra kết nối mạng và thử lại.");
+    setBooting(false);
+  }, 12000);
+
+  // Hàm applySession chính
+  const applySession = async (authUser = null) => {
+    try {
+      // KHÔNG refresh session ở đây để tránh 429 – Supabase đã tự động refresh
+      const { user: sessionUser, profile } = await getSessionProfile();
       if (!mounted) return;
-      setBootError("Đăng nhập mất quá lâu. Hãy kiểm tra kết nối mạng và thử lại.");
-      setBooting(false);
-    }, 12000);
 
-    const applySession = async (authUser = null) => {
-      try {
-        const { user: sessionUser, profile } = await getSessionProfile();
-        if (!mounted) return;
+      if (authUser && !profile) {
+        console.log("Đang chờ khởi tạo profile...");
+        return;
+      }
 
-        if (authUser && !profile) {
-          console.log("Đang chờ khởi tạo profile...");
-          return; 
-        }
-
-        const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
-        
-        if (!nextUser) {
-          setUser(null);
-          setCouple(null);
-          setLocalUser(null);
-          setLocalCouple(null);
-          setScreen("login");
+      const nextUser = sessionUser || (authUser ? profileToUser(profile, authUser) : null);
+      if (!nextUser) {
+        // Thử lại lấy session một lần nữa
+        const retry = await supabase.auth.getSession();
+        if (retry?.data?.session?.user) {
+          console.log("Session tồn tại, chờ profile...");
           return;
         }
-
-        // ✅ 3. ĐĂNG NHẬP ONESIGNAL AN TOÀN (CHỐNG LỖI 'Qe')
-        // Bắt buộc phải biến ID thành dạng Chuỗi (String) và đảm bảo OneSignal đã chạy
-        if (OneSignal.initialized && nextUser.id) {
-          OneSignal.login(String(nextUser.id)).catch(err => {
-            console.warn("Lỗi đăng nhập OneSignal (Không sao cả):", err);
-          });
-        }
-
-        const room = await getMyRoom(nextUser);
-        if (!mounted) return;
-
-        setUser(nextUser);
-        setLocalUser(nextUser);
-        setCouple(room);
-        setLocalCouple(room);
-        
-        setScreen(room ? "app" : "setup");
-
-      } catch (error) {
-        console.error("Lỗi Apply Session:", error);
-        if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
-      } finally {
-        window.clearTimeout(timeout);
-        if (mounted) setBooting(false);
-      }
-    };
-
-    const params = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const authError = params.get("error_description") || hashParams.get("error_description") || params.get("error") || hashParams.get("error");
-    
-    if (authError) {
-      setBootError(authError);
-      setBooting(false);
-    } else {
-      applySession();
-    }
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      if (!session?.user) {
+        // Thực sự không có session
         setUser(null);
         setCouple(null);
         setLocalUser(null);
         setLocalCouple(null);
         setScreen("login");
-        setBooting(false);
         return;
       }
-      applySession(session.user);
-    });
 
-    return () => {
-      mounted = false;
+      // Login OneSignal không chặn
+      loginToOneSignal(nextUser.id);
+
+      const room = await getMyRoom(nextUser);
+      if (!mounted) return;
+
+      setUser(nextUser);
+      setLocalUser(nextUser);
+      setCouple(room);
+      setLocalCouple(room);
+      setScreen(room ? "app" : "setup");
+    } catch (error) {
+      console.error("Lỗi Apply Session:", error);
+      if (mounted) setBootError(error.message || "Không thể hoàn tất đăng nhập.");
+    } finally {
       window.clearTimeout(timeout);
-      data.subscription.unsubscribe();
-    };
-  }, [setLocalCouple, setLocalUser]);
+      if (mounted) setBooting(false);
+    }
+  };
+
+  // Xử lý auth error từ URL
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const authError = params.get("error_description") || hashParams.get("error_description") || params.get("error") || hashParams.get("error");
+  if (authError) {
+    setBootError(authError);
+    setBooting(false);
+  } else {
+    applySession();
+  }
+
+  // Lắng nghe auth state change
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (!mounted) return;
+    if (!session?.user) {
+      setUser(null); setCouple(null);
+      setLocalUser(null); setLocalCouple(null);
+      setScreen("login");
+      setBooting(false);
+      return;
+    }
+    applySession(session.user);
+  });
+
+  return () => {
+    mounted = false;
+    window.clearTimeout(timeout);
+    data.subscription.unsubscribe();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [setLocalCouple, setLocalUser]);
 
   const handleLogin = (u) => {
     setUser(u);
