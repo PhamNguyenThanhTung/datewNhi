@@ -89,15 +89,18 @@ const s = {
   featureArrow: { color: '#555', fontSize: 18, flexShrink: 0 },
 
   // Back header (Giữ nguyên của Tùng)
-  backBar: {
-    padding: '12px 16px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    background: 'rgba(255,255,255,0.03)',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-    flexShrink: 0,
-  },
+ backBar: {
+  padding: '12px 16px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  background: 'rgba(10,10,18,0.97)',  // ← đổi màu cho rõ
+  borderBottom: '1px solid rgba(255,255,255,0.06)',
+  flexShrink: 0,
+  position: 'sticky',   // ← thêm
+  top: 0,               // ← thêm
+  zIndex: 10,           // ← thêm
+},
   backBtn: {
     width: 36,
     height: 36,

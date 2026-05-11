@@ -12,6 +12,8 @@ import BucketTab from "./tabs/BucketTab";
 import ProfileTab from "./tabs/ProfileTab";
 import AlbumTab from "./tabs/AlbumTab";
 import CountdownTab from "./tabs/CountdownTab";
+import MapTab from './tabs/MapTab';
+import 'leaflet/dist/leaflet.css';
 
 export default function MainApp({ user, couple, onLogout, onUpdateUser }) {
   const [tab, setTab] = useState("home");
@@ -326,14 +328,16 @@ const handleDeleteMemory = async (memory) => {
         {tab === "home" && <HomeTab user={user} couple={displayCouple} questions={dailyPrompts} myAnswers={myAnswers} partnerAnswers={partnerAnswers} ansInputs={ansInputs} setAnsInputs={setAnsInputs} skippedQuestions={skippedQuestions} ptInput={ptInput} setPtInput={setPtInput} showSim={showSim} setShowSim={setShowSim} submitMy={submitMy} submitPt={submitPt} skipQuestion={skipQuestion} uploadQuestionPhoto={uploadQuestionPhoto} realtime={isSupabaseConfigured} />}
         {tab === "history" && <HistoryTab user={user} couple={displayCouple} history={history} />}
         {tab === "games" && (
-          <GamesTab
-            roomId={couple.roomId}
-            userId={user.id}
-            myName={user.name}
-            partnerName={couple.partnerName}
-            partnerId={couple.partnerId || null}
-          />
-        )}
+  <div style={{ margin: '-20px -16px -96px', height: 'calc(100vh - 57px)' }}>
+    <GamesTab
+      roomId={couple.roomId}
+      userId={user.id}
+      myName={user.name}
+      partnerName={couple.partnerName}
+      partnerId={couple.partnerId || null}
+    />
+  </div>
+)}
         {tab === "album" && (
   <AlbumTab
     user={user}
@@ -342,6 +346,23 @@ const handleDeleteMemory = async (memory) => {
     setMemories={setMemories}
     onDeleteMemory={handleDeleteMemory}   // ✅ dòng mới
   />
+)}
+        
+{tab === 'map' && (
+  <div style={{ margin: '-20px -16px -96px', height: 'calc(100vh - 57px)' }}>
+    <MapTab 
+      roomId={roomId}              // ✅ dùng biến roomId đã computed, không phải couple.roomId
+      userId={user.id} 
+      myProfile={{ 
+        display_name: user.name,   // ✅ map đúng field name
+        avatar_url: user.avatar 
+      }}
+      partnerProfile={{ 
+        display_name: couple.partnerName, 
+        avatar_url: couple.partnerAvatar 
+      }}
+    />
+  </div>
 )}
         {tab === "bucket" && <BucketTab bucket={bucket} newItem={newItem} setNewItem={setNewItem} addItem={addItem} addSuggestion={addSuggestion} toggleItem={toggleItem} removeItem={removeItem} />}
         {tab === "profile" && <ProfileTab user={user} couple={displayCouple} streak={streak} history={history} bucket={bucket} editMode={editMode} setEditMode={setEditMode} editName={editName} setEditName={setEditName} saveProfile={saveProfile} onLogout={onLogout} onUpdateUser={onUpdateUser} />}
@@ -352,6 +373,7 @@ const handleDeleteMemory = async (memory) => {
           { id: "home", icon: "🕯️", label: "Hôm nay" },
           { id: "history", icon: "📖", label: "Lịch sử" },
           { id: "games", icon: "🎮", label: "Góc Vui" },
+          { id: "map", icon: "🗺️", label: "Map" },
           { id: "album", icon: "🖼️", label: "Album" },
           { id: "countdown", icon: "⏰", label: "Đếm ngày" },
           { id: "bucket", icon: "🌟", label: "Danh sách" },
