@@ -165,7 +165,7 @@ APP_URL=https://datewnhi.vercel.app
 2. `CRON_SECRET`: Tạo token ngẫu nhiên mạnh bằng `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 3. Deploy: `git push` - Vercel sẽ tự động trigger cron lúc 20:00 VN hàng ngày
 
-## 8. Hệ thống Push Notifications (OneSignal)
+## 8. Hệ thống Push Notifications (OneSignal) v2.0
 
 ### 📲 Tính năng
 - **Thời gian thực:** Nhận thông báo ngay khi partner trả lời / tương tác
@@ -175,20 +175,32 @@ APP_URL=https://datewnhi.vercel.app
   - ✅ Partner thêm item vào bucket list
   - ✅ Partner chấp nhận gợi ý bucket list
   - ✅ Partner cập nhật countdown
+  - ✅ Partner gọi vào play games (Góc Vui)
 - **Link:** Bấm thông báo → Mở app ngay lập tức
 
-### 🔧 Integration
+### 🔧 Integration v2.0
 - **SDK:** `react-onesignal` v3.5.1
 - **Setup:** 
   - `index.html` load OneSignal SDK script
-  - `App.jsx` initialize OneSignal + request permission (showSlidedownPrompt)
+  - `App.jsx` initialize OneSignal + request permission
   - `coupleService.js` có hàm `sendPushNotification(targetUserId, message)` gửi qua REST API
-  - `HomeTab.jsx`, `MainApp.jsx` gọi hàm này khi trigger event
+  - **Retry Logic:** Nếu OneSignal chưa ready, tự động thử lại 5 lần (1 giây mỗi lần)
+  - **User Login:** Đợi OneSignal ready trước khi gọi `login(userId)`
 
-### 📋 OneSignal Setup
+### 🔍 Debug Features (v2.0)
+Console logs cho tracking:
+- `🔔 [ONESIGNAL]` - SDK initialization, permission checks, Player ID
+- `🔑 [ONESIGNAL]` - User login attempts (retry 1-5)
+- `💬 [ANSWER]` - Answer saving flow
+- `📤 [NOTIFICATION]` - Sending start
+- `📊 [NOTIFICATION]` - Response status & headers
+- `❌ [NOTIFICATION]` - Detailed errors with HTTP status
+- `✅ [NOTIFICATION]` - Success with notification ID
+- `🎯 [BUCKET/SUGGESTION/COUNTDOWN/GAMES]` - Feature-specific events
+
+### 📋 OneSignal Config
 ```
-7602eae8-63b0-4fe5-92e4-5c13f3bac45fApp ID: 
-REST API Key: os_v2_app_oybov2ddwbh6lexelqj7howel6dbpkytj6ievp44iqcvlzte6hfv6qsa4ygpmky33yho7qwfzw7mdoo5ujpyjsg3somshbr2erluira
+App ID: 7602eae8-63b0-4fe5-92e4-5c13f3bac45f
 ```
 
 ## 9. API/Services
@@ -197,13 +209,27 @@ REST API Key: os_v2_app_oybov2ddwbh6lexelqj7howel6dbpkytj6ievp44iqcvlzte6hfv6qsa
 - Cấu hình Supabase client (public key)
 - Export client instance
 
-### `lib/coupleService.js`
-- `loadRoomData()` - Load tất cả dữ liệu phòng
-- `saveAnswer()` - Lưu câu trả lời của user
+### `lib/coupleService.js` (Updated v2.0)
+- `saveAnswer(...)` - Lưu câu trả lời + gửi notification + update streak
+- `sendPushNotification(targetUserId, message)` - REST API with full logging & error handling
 - `uploadMemory()` - Upload ảnh lên Storage
 - `subscribeRoom()` - Subscribe realtime updates
-- `saveCountdown()` - Lưu countdown info
-- `saveBucketItem()` - Thêm item to bucket list
+- `saveBucketItem()` - Thêm item to bucket list + trigger notification
+- `saveCountdown()` - Lưu countdown info + trigger notification
+- `refreshStreak()` - Cập nhật streak count
+
+### `screens/MainApp/MainApp.jsx` (Updated v2.0)
+- `addItem()` - Add bucket item + console log + notification
+- `addSuggestion()` - Accept suggestion + console log + notification
+- `handleSaveCountdown()` - Save countdown + console log + notification
+- `uploadQuestionPhoto()` - Upload ảnh + notification qua saveAnswer
+- `attemptStreakUpdate()` - Manual streak increment
+
+### `screens/MainApp/tabs/HomeTab.jsx` (Updated v2.0)
+- `handleAnswerSubmit()` - Answer submission + partnerId logging + saveAnswer call
+
+### `screens/MainApp/tabs/GamesTab.jsx` (Updated v2.0)
+- `handleInvite()` - Game invite with partnerJoined check + logging
 
 ## 10. Local Storage Keys
 
@@ -227,18 +253,25 @@ skipped_${coupleCode}_${todayKey}  // Những câu skip lại
 - ✅ Local storage & realtime sync
 - ✅ **Email reminder system** (20:00 VN mỗi ngày)
 - ✅ **Album:** Nén ảnh 5MB → 300KB, fullscreen view, long press delete
-- ✅ **Push Notifications:** OneSignal web notifications (Q&A, upload, bucket, countdown)
-- ✅ **Streak Logic:** Any interaction counts (not just Q&A)
+- ✅ **Push Notifications v2.0:** OneSignal with retry logic + full console debugging
+- ✅ **Streak Logic:** Any interaction counts (Q&A, upload, bucket, countdown, games)
+- ✅ **Bucket List:** Add item, accept suggestion, both with notifications
+- ✅ **Games Tab:** Fixed partner join check, invite with notification
+- ✅ **All Services:** Console logs for debugging
 
-### 🔄 Đang phát triển
-- Tối ưu performance
-- Testing & bug fixes
+### 🔄 Đang phát triển / Cần kiểm tra
+- 🔍 OneSignal subscription status (người dùng cần bật notification permission)
+- 🔍 Retry logic chạy đúng khi OneSignal chậm load
+- 🔍 Notification content hiển thị chính xác trên browser
+- 📊 Testing toàn bộ notification flow (A → B → C path)
 
 ### 📅 Sắp tới
 - Social sharing (chia sẻ kỷ niệm)
 - Custom questions (tạo câu hỏi riêng)
 - Themes & personalization
+- In-app chat messages
+- Voice/video call integration
 
 ---
 
-**Cập nhật lần cuối:** May 10, 2026 | **Push Notifications v1.0 + Streak Logic Refinement** ✅
+**Cập nhật lần cuối:** May 11, 2026 | **Push Notifications v2.0 (Retry Logic + Debug Logging)** 🚀
